@@ -263,7 +263,7 @@ input[type="checkbox"]:disabled { opacity: .35; cursor: not-allowed; }
   text-transform: uppercase; letter-spacing: .5px;
   color: var(--navy); margin-bottom: 5px;
 }
-input[type="text"], input[type="email"], input[type="password"] {
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="datetime-local"] {
   width: 100%; padding: 9px 12px;
   border: 1px solid var(--border); font-size: 14px; color: var(--text);
   background: white; outline: none; font-family: inherit;
@@ -465,6 +465,17 @@ input[type="file"] {
 
   /* Portal header */
   .portal-ribbon { font-size: 13px !important; padding: 12px 14px !important; letter-spacing: 0.3px !important; }
+
+  /* ── MOBILE: Course table fix ── */
+  .tab-panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .semester-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .course-table { min-width: 540px; }
+  .course-table th { padding: 7px 8px; font-size: 10px; }
+  .course-table td { padding: 7px 8px; font-size: 12px; }
+
+  /* Info table compact */
+  .info-table td { padding: 6px 8px; font-size: 12px; }
+  .info-table td.lbl { font-size: 10px; }
 }
 
 @media (max-width: 680px) {

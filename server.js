@@ -28,8 +28,26 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
 // ── Config ────────────────────────────────────────────────────────────────────
 const JWT_SECRET  = process.env.JWT_SECRET    || 'dev-insecure-secret';
 const ADMIN_PASS  = process.env.ADMIN_PASSWORD || 'admin123';
-const MAX_COURSES = 2;
 const DEV_MODE    = !process.env.SMTP_USER;
+
+// Fetch dynamic settings from DB
+async function getSettingValue(key, fallback) {
+  const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+  return data?.value || fallback;
+}
+async function getMaxCourses() {
+  const val = await getSettingValue('max_courses', '2');
+  return parseInt(val, 10) || 2;
+}
+async function checkRegistrationWindow() {
+  const start = await getSettingValue('reg_start', '');
+  const end   = await getSettingValue('reg_end', '');
+  const now   = new Date();
+  if (!start && !end) return { open: false, reason: 'Registration has not been published yet. Please check back later.', start: '', end: '' };
+  if (start && now < new Date(start)) return { open: false, reason: `Registration has not started yet. It opens on ${new Date(start).toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short', timeZone:'Asia/Kolkata' })} IST.`, start, end };
+  if (end && now > new Date(end)) return { open: false, reason: `Registration has closed. It ended on ${new Date(end).toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short', timeZone:'Asia/Kolkata' })} IST.`, start, end };
+  return { open: true, start, end };
+}
 
 if (DEV_MODE) console.warn('\n[DEV MODE] SMTP not configured — OTPs printed to console.\n');
 
@@ -244,9 +262,21 @@ app.post('/api/verify-otp', async (req, res) => {
   }
 });
 
+// Public settings (for student pages — registration window + course limit)
+app.get('/api/settings/public', async (req, res) => {
+  try {
+    const window = await checkRegistrationWindow();
+    const maxCourses = await getMaxCourses();
+    res.json({ ...window, max_courses: maxCourses });
+  } catch { res.json({ open: false, reason: 'Unable to check registration status.', max_courses: 2 }); }
+});
+
 // Get student's eligible courses grouped by category
 app.get('/api/my-courses', requireStudent, async (req, res) => {
   try {
+    const window = await checkRegistrationWindow();
+    if (!window.open) return res.status(403).json({ error: window.reason });
+
     const { data: courses } = await supabase.from('student_courses').select().eq('email', req.user.email);
     const grouped = { debarred: [], failed: [], improvement: [] };
     for (const c of courses) {
@@ -277,11 +307,16 @@ app.post('/api/apply', requireStudent, async (req, res) => {
   if (!isStaff && !payment_screenshot) {
     return res.status(400).json({ error: 'Please upload a screenshot of your payment.' });
   }
+  // Check registration window
+  const regWindow = await checkRegistrationWindow();
+  if (!regWindow.open) return res.status(403).json({ error: regWindow.reason });
+
+  const maxCourses = await getMaxCourses();
   if (!Array.isArray(courses) || courses.length === 0) {
     return res.status(400).json({ error: 'Please select at least one course.' });
   }
-  if (courses.length > MAX_COURSES) {
-    return res.status(400).json({ error: `Maximum ${MAX_COURSES} courses allowed.` });
+  if (courses.length > maxCourses) {
+    return res.status(400).json({ error: `Maximum ${maxCourses} courses allowed.` });
   }
 
   // Validate each course against student's eligible list
@@ -634,11 +669,35 @@ app.delete('/api/admin/clear/:table', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
+// Save all registration settings (course limit + registration window)
+app.post('/api/admin/save-settings', requireAdmin, async (req, res) => {
+  const { max_courses, reg_start, reg_end } = req.body;
+  try {
+    const settings = [
+      { key: 'max_courses', value: String(max_courses || 2) },
+      { key: 'reg_start',   value: reg_start || '' },
+      { key: 'reg_end',     value: reg_end || '' },
+    ];
+    for (const s of settings) {
+      await supabase.from('settings').upsert(s, { onConflict: 'key' });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save settings.' });
+  }
+});
+
 // Settings
 app.get('/api/admin/settings', requireAdmin, async (req, res) => {
-  const { data: s } = await supabase.from('settings').select('value').eq('key', 'upi_id').maybeSingle();
+  const keys = ['upi_id', 'max_courses', 'reg_start', 'reg_end'];
+  const results = {};
+  for (const k of keys) {
+    const { data } = await supabase.from('settings').select('value').eq('key', k).maybeSingle();
+    results[k] = data?.value || '';
+  }
   const { data: qr } = await supabase.from('settings').select('key').eq('key', 'qr_code').maybeSingle();
-  res.json({ upi_id: s?.value || '', has_qr: !!qr });
+  results.has_qr = !!qr;
+  res.json(results);
 });
 
 // ── Page Routes ───────────────────────────────────────────────────────────────

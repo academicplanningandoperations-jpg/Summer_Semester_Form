@@ -136,9 +136,87 @@ async function loadSettings() {
     if (res.ok) {
       const d = await res.json();
       if (byId('inp-upi')) byId('inp-upi').value = d.upi_id || '';
+      if (byId('inp-max-courses')) byId('inp-max-courses').value = d.max_courses || '2';
+      if (byId('inp-reg-start') && d.reg_start) {
+        // Convert ISO to datetime-local format
+        const dt = new Date(d.reg_start);
+        byId('inp-reg-start').value = dt.toISOString().slice(0, 16);
+      }
+      if (byId('inp-reg-end') && d.reg_end) {
+        const dt = new Date(d.reg_end);
+        byId('inp-reg-end').value = dt.toISOString().slice(0, 16);
+      }
       if (d.has_qr) byId('qr-preview').innerHTML = `<img src="/api/payment/qr-code?t=${Date.now()}" style="max-width:160px;border:1px solid var(--border);margin-top:8px;">`;
+
+      // Show current registration status
+      updateRegStatusDisplay(d.reg_start, d.reg_end);
     }
   } catch {}
+}
+
+function updateRegStatusDisplay(start, end) {
+  const el = byId('reg-status-display');
+  if (!el) return;
+  const now = new Date();
+  if (!start && !end) {
+    el.innerHTML = '<div class="alert alert-warn" style="margin:0;"><strong>⚠ Registration not published yet.</strong> Set the dates and click Publish to make the form live.</div>';
+    return;
+  }
+  const s = start ? new Date(start) : null;
+  const e = end ? new Date(end) : null;
+  if (s && now < s) {
+    el.innerHTML = `<div class="alert alert-info" style="margin:0;"><strong>⏳ Scheduled:</strong> Registration will open on ${s.toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short' })} IST</div>`;
+  } else if (e && now > e) {
+    el.innerHTML = `<div class="alert alert-error" style="margin:0;"><strong>🔒 Closed:</strong> Registration ended on ${e.toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short' })} IST</div>`;
+  } else {
+    const endStr = e ? ` until ${e.toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short' })} IST` : '';
+    el.innerHTML = `<div class="alert alert-success" style="margin:0;"><strong>✅ LIVE:</strong> Registration is currently open${endStr}</div>`;
+  }
+}
+
+async function saveRegistrationConfig() {
+  const max_courses = parseInt(byId('inp-max-courses')?.value || '2', 10);
+  const reg_start   = byId('inp-reg-start')?.value || '';
+  const reg_end     = byId('inp-reg-end')?.value || '';
+
+  if (!reg_start || !reg_end) return setRes('settings-alert', 'Please set both start and end dates.', 'error');
+  if (new Date(reg_start) >= new Date(reg_end)) return setRes('settings-alert', 'End date must be after start date.', 'error');
+  if (max_courses < 1 || max_courses > 10) return setRes('settings-alert', 'Course limit must be between 1 and 10.', 'error');
+
+  try {
+    const res = await api('POST', '/api/admin/save-settings', {
+      max_courses,
+      reg_start: new Date(reg_start).toISOString(),
+      reg_end:   new Date(reg_end).toISOString()
+    });
+    if (res.ok) {
+      setRes('settings-alert', '✓ Registration published successfully! Students can now apply within the set window.', 'success');
+      updateRegStatusDisplay(new Date(reg_start).toISOString(), new Date(reg_end).toISOString());
+    } else {
+      setRes('settings-alert', 'Failed to save settings.', 'error');
+    }
+  } catch { setRes('settings-alert', 'Network error.', 'error'); }
+}
+
+async function closeRegistration() {
+  if (!confirm('Close registration immediately? Students will not be able to submit new applications.')) return;
+  try {
+    // Set end date to now
+    const now = new Date().toISOString();
+    const reg_start = byId('inp-reg-start')?.value ? new Date(byId('inp-reg-start').value).toISOString() : now;
+    const max_courses = parseInt(byId('inp-max-courses')?.value || '2', 10);
+    const res = await api('POST', '/api/admin/save-settings', {
+      max_courses,
+      reg_start,
+      reg_end: now
+    });
+    if (res.ok) {
+      setRes('settings-alert', '✓ Registration closed. Students can no longer apply.', 'success');
+      const dt = new Date(now);
+      byId('inp-reg-end').value = dt.toISOString().slice(0, 16);
+      updateRegStatusDisplay(reg_start, now);
+    }
+  } catch { setRes('settings-alert', 'Network error.', 'error'); }
 }
 
 /* ─── Submissions ────────────────────────────────────────────────────────── */

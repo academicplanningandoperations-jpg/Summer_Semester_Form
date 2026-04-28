@@ -2,9 +2,9 @@
 let studentToken = null;
 let studentData  = null;
 let myCourses    = { debarred: [], failed: [], improvement: [] };
-// Flat array of selected course objects; max 2; each has _key: "cat-idx"
+// Flat array of selected course objects; max dynamic; each has _key: "cat-idx"
 let selection    = [];
-const MAX        = 2;
+let MAX          = 2;
 
 /* ─── Bootstrap ──────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (onIndex) {
     if (studentToken) { window.location.href = '/apply'; return; }
     byId('inp-email')?.addEventListener('keydown', e => { if (e.key === 'Enter') sendOTP(); });
+    checkRegistrationStatus();
   }
   if (onApply) {
     if (!studentToken) { window.location.href = '/'; return; }
@@ -135,6 +136,36 @@ function doLogout() {
   window.location.href = '/';
 }
 
+/* ─── Index page: check registration status ─── */
+async function checkRegistrationStatus() {
+  try {
+    const res = await fetch('/api/settings/public');
+    if (!res.ok) return;
+    const settings = await res.json();
+    const instrEl = byId('course-limit-instr');
+    if (instrEl) instrEl.innerHTML = `A maximum of <strong>${settings.max_courses} course${settings.max_courses > 1 ? 's' : ''}</strong> may be registered across all categories (Debarred / Failed / Improvement).`;
+
+    const banner = byId('reg-status-banner');
+    if (!banner) return;
+    if (!settings.open) {
+      banner.className = 'alert alert-error mb-12';
+      banner.innerHTML = `<strong>🚫 ${esc(settings.reason)}</strong>`;
+      banner.classList.remove('hidden');
+      const emailInp = byId('inp-email');
+      const sendBtn  = byId('btn-send');
+      if (emailInp) { emailInp.disabled = true; emailInp.placeholder = 'Registration is closed'; }
+      if (sendBtn)  { sendBtn.disabled = true; sendBtn.textContent = 'REGISTRATION CLOSED'; }
+    } else {
+      if (settings.end) {
+        const endDate = new Date(settings.end).toLocaleString('en-IN', { dateStyle:'long', timeStyle:'short' });
+        banner.className = 'alert alert-success mb-12';
+        banner.innerHTML = `<strong>✅ Registration is open.</strong> Last date to apply: <strong>${endDate} IST</strong>`;
+        banner.classList.remove('hidden');
+      }
+    }
+  } catch {}
+}
+
 /* ─── APPLY: Course Selection ────────────────────────────────────────────── */
 async function initApply() {
   fill('d-name',    studentData?.name);
@@ -142,6 +173,31 @@ async function initApply() {
   fill('d-school',  studentData?.school);
   fill('d-program', studentData?.program);
   fill('d-email',   studentData?.email);
+
+  try {
+    const sRes = await fetch('/api/settings/public');
+    if (sRes.ok) {
+      const settings = await sRes.json();
+      MAX = settings.max_courses || 2;
+      const titleEl = byId('selection-card')?.querySelector('.section-title small');
+      if (titleEl) titleEl.textContent = `(Maximum ${MAX} course${MAX > 1 ? 's' : ''} across all categories)`;
+      const counterSpan = byId('counter-num')?.parentElement;
+      if (counterSpan) counterSpan.innerHTML = `Courses Selected: <span id="counter-num" class="counter-val">0</span> / ${MAX}`;
+
+      if (!settings.open) {
+        const banner = byId('no-courses');
+        if (banner) {
+          banner.classList.remove('hidden');
+          banner.querySelector('.section-body').innerHTML = `
+            <div class="alert alert-error">
+              <strong>🚫 Registration is currently closed.</strong><br>
+              ${esc(settings.reason)}
+            </div>`;
+        }
+        return;
+      }
+    }
+  } catch {}
 
   try {
     const res = await fetch('/api/my-application', { headers:{'Authorization':`Bearer ${studentToken}`} });
@@ -155,6 +211,19 @@ async function initApply() {
   try {
     const res = await fetch('/api/my-courses', { headers:{'Authorization':`Bearer ${studentToken}`} });
     if (res.status === 401) { doLogout(); return; }
+    if (res.status === 403) {
+      const err = await res.json();
+      const banner = byId('no-courses');
+      if (banner) {
+        banner.classList.remove('hidden');
+        banner.querySelector('.section-body').innerHTML = `
+          <div class="alert alert-error">
+            <strong>🚫 Registration is currently closed.</strong><br>
+            ${esc(err.error)}
+          </div>`;
+      }
+      return;
+    }
     if (res.ok) myCourses = await res.json();
   } catch {}
 
