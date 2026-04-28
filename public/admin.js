@@ -168,9 +168,9 @@ function renderPayments(rows) {
       <td><span class="status-pill pill-pending">Pending</span></td>
       <td style="font-size:12px;white-space:nowrap;">${ist(r.submitted_at)}</td>
       <td style="text-align:center;white-space:nowrap;">
-        <button class="btn btn-green btn-sm" onclick="verifyPayment('${r._id}')">&#10003; Verify</button>
+        <button class="btn btn-green btn-sm" onclick="verifyPayment('${r.id}')">&#10003; Verify</button>
         &nbsp;
-        <button class="btn btn-red btn-sm" onclick="rejectPayment('${r._id}')">&#10007; Reject</button>
+        <button class="btn btn-red btn-sm" onclick="rejectPayment('${r.id}')">&#10007; Reject</button>
       </td>
     </tr>`).join('');
 }
@@ -191,8 +191,8 @@ function renderSubs(rows) {
       <td><span class="status-pill pill-${r.payment_status}">${esc(r.payment_status)}</span></td>
       <td style="font-size:12px;white-space:nowrap;">${ist(r.submitted_at)}</td>
       <td>
-        ${r.payment_status==='pending' ? `<button class="btn btn-green btn-sm" onclick="verifyPayment('${r._id}')">Verify</button>` : ''}
-        <button class="btn btn-red btn-sm" style="margin-top:2px;" onclick="deleteSub('${r._id}')">Del</button>
+        ${r.payment_status==='pending' ? `<button class="btn btn-green btn-sm" onclick="verifyPayment('${r.id}')">Verify</button>` : ''}
+        <button class="btn btn-red btn-sm" style="margin-top:2px;" onclick="deleteSub('${r.id}')">Del</button>
       </td>
     </tr>`).join('');
 }

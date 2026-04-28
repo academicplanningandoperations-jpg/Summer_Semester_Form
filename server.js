@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express    = require('express');
-const Datastore  = require('@seald-io/nedb');
+const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
 const multer     = require('multer');
 const { parse }  = require('csv-parse/sync');
@@ -13,22 +13,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Dirs ──────────────────────────────────────────────────────────────────────
-['data', 'uploads'].forEach(d => {
+['uploads'].forEach(d => {
   const p = path.join(__dirname, d);
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 });
 
-// ── Database ──────────────────────────────────────────────────────────────────
-const db = {
-  students:        new Datastore({ filename: path.join(__dirname, 'data', 'students.db'),        autoload: true }),
-  student_courses: new Datastore({ filename: path.join(__dirname, 'data', 'student_courses.db'), autoload: true }),
-  otps:            new Datastore({ filename: path.join(__dirname, 'data', 'otps.db'),            autoload: true }),
-  submissions:     new Datastore({ filename: path.join(__dirname, 'data', 'submissions.db'),     autoload: true }),
-  settings:        new Datastore({ filename: path.join(__dirname, 'data', 'settings.db'),        autoload: true }),
-};
-db.students.ensureIndex({ fieldName: 'email',      unique: true });
-db.students.ensureIndex({ fieldName: 'sap_id',     unique: true });
-db.student_courses.ensureIndex({ fieldName: 'email_course', unique: true }); // email + '_' + course_code
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  console.error('FATAL: Set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env');
+  process.exit(1);
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const JWT_SECRET  = process.env.JWT_SECRET    || 'dev-insecure-secret';
@@ -154,8 +149,8 @@ function flexGet(row, aliases) {
 }
 
 async function generateAppNo() {
-  const count = await db.submissions.countAsync({});
-  return `UPES-SS-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+  const { count } = await supabase.from('submissions').select('*', { count: 'exact', head: true });
+  return `UPES-SS-${new Date().getFullYear()}-${String((count || 0) + 1).padStart(6, '0')}`;
 }
 
 // ── Auth Middleware ───────────────────────────────────────────────────────────
@@ -201,20 +196,18 @@ app.post('/api/send-otp', async (req, res) => {
   }
 
   try {
-    const student = await db.students.findOneAsync({ email });
+    const { data: student } = await supabase.from('students').select().eq('email', email).maybeSingle();
     if (!student) {
       return res.status(400).json({ error: 'Your email is not registered in the eligible students list. Please contact your School Academic Coordinator.' });
     }
 
-    const recent = await db.otps.findOneAsync({
-      email, used: false, expires_at: { $gt: Date.now() + 8 * 60 * 1000 } // block resend for first 2 min
-    });
+    const { data: recent } = await supabase.from('otps').select().eq('email', email).eq('used', false).gt('expires_at', Date.now() + 8 * 60 * 1000).limit(1).maybeSingle();
     if (recent) {
       return res.status(429).json({ error: 'An OTP was already sent to your email. Please wait 1 minute before requesting again.' });
     }
 
     const otp = generateOTP();
-    await db.otps.insertAsync({ email, otp, expires_at: Date.now() + 10 * 60 * 1000, used: false });
+    await supabase.from('otps').insert({ email, otp, expires_at: Date.now() + 10 * 60 * 1000, used: false });
 
     await sendMail(email, 'UPES Summer Semester — OTP Verification', otpEmailHtml(student.name, otp));
     if (DEV_MODE) console.log(`[DEV] OTP for ${email} → ${otp}`);
@@ -233,12 +226,12 @@ app.post('/api/verify-otp', async (req, res) => {
   if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
   try {
-    const record = await db.otps.findOneAsync({ email, otp, used: false, expires_at: { $gt: Date.now() } });
+    const { data: record } = await supabase.from('otps').select().eq('email', email).eq('otp', otp).eq('used', false).gt('expires_at', Date.now()).limit(1).maybeSingle();
     if (!record) return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new one.' });
 
-    await db.otps.updateAsync({ _id: record._id }, { $set: { used: true } });
+    await supabase.from('otps').update({ used: true }).eq('id', record.id);
 
-    const student = await db.students.findOneAsync({ email });
+    const { data: student } = await supabase.from('students').select().eq('email', email).maybeSingle();
     const token   = jwt.sign({ email, role: 'student' }, JWT_SECRET, { expiresIn: '3h' });
 
     res.json({
@@ -254,7 +247,7 @@ app.post('/api/verify-otp', async (req, res) => {
 // Get student's eligible courses grouped by category
 app.get('/api/my-courses', requireStudent, async (req, res) => {
   try {
-    const courses = await db.student_courses.findAsync({ email: req.user.email });
+    const { data: courses } = await supabase.from('student_courses').select().eq('email', req.user.email);
     const grouped = { debarred: [], failed: [], improvement: [] };
     for (const c of courses) {
       if (grouped[c.category] !== undefined) grouped[c.category].push(c);
@@ -267,7 +260,7 @@ app.get('/api/my-courses', requireStudent, async (req, res) => {
 
 // Check existing application
 app.get('/api/my-application', requireStudent, async (req, res) => {
-  const sub = await db.submissions.findOneAsync({ email: req.user.email });
+  const { data: sub } = await supabase.from('submissions').select().eq('email', req.user.email).maybeSingle();
   if (!sub) return res.json({ exists: false });
   res.json({ exists: true, application: sub });
 });
@@ -291,7 +284,7 @@ app.post('/api/apply', requireStudent, async (req, res) => {
   // Validate each course against student's eligible list
   const validated = [];
   for (const c of courses) {
-    const dbCourse = await db.student_courses.findOneAsync({ email, course_code: c.course_code });
+    const { data: dbCourse } = await supabase.from('student_courses').select().eq('email', email).eq('course_code', c.course_code).maybeSingle();
     if (!dbCourse) return res.status(400).json({ error: `Course ${c.course_code} is not in your eligible course list.` });
     validated.push({
       course_code: dbCourse.course_code,
@@ -302,18 +295,18 @@ app.post('/api/apply', requireStudent, async (req, res) => {
     });
   }
 
-  const existing = await db.submissions.findOneAsync({ email });
+  const { data: existing } = await supabase.from('submissions').select().eq('email', email).maybeSingle();
   if (existing) {
     return res.status(400).json({ error: 'You have already submitted an application. Please contact the administrator if changes are needed.' });
   }
 
-  const student     = await db.students.findOneAsync({ email });
+  const { data: student } = await supabase.from('students').select().eq('email', email).maybeSingle();
   const app_no      = await generateAppNo();
   const submitted_at = new Date().toISOString();
   const total_fee   = validated.reduce((s, c) => s + c.fee, 0);
   const ip          = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
-  await db.submissions.insertAsync({
+  await supabase.from('submissions').insert({
     app_no, email,
     sap_id:         student.sap_id,
     student_name:   student.name,
@@ -390,16 +383,19 @@ app.post('/api/apply', requireStudent, async (req, res) => {
 
 // Payment info (QR code UPI ID)
 app.get('/api/payment/info', async (req, res) => {
-  const s = await db.settings.findOneAsync({ key: 'payment' });
-  const qrPath = path.join(__dirname, 'data', 'qr-code.png');
-  res.json({ upi_id: s?.upi_id || '', has_qr: fs.existsSync(qrPath) });
+  const { data: s } = await supabase.from('settings').select('value').eq('key', 'upi_id').maybeSingle();
+  const { data: qr } = await supabase.from('settings').select('key').eq('key', 'qr_code').maybeSingle();
+  res.json({ upi_id: s?.value || '', has_qr: !!qr });
 });
 
 // Serve QR code image
-app.get('/api/payment/qr-code', (req, res) => {
-  const qrPath = path.join(__dirname, 'data', 'qr-code.png');
-  if (fs.existsSync(qrPath)) return res.sendFile(qrPath);
-  // Fallback: return a placeholder
+app.get('/api/payment/qr-code', async (req, res) => {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'qr_code').maybeSingle();
+  if (data?.value) {
+    const buf = Buffer.from(data.value, 'base64');
+    res.set('Content-Type', 'image/png');
+    return res.send(buf);
+  }
   res.status(404).json({ error: 'QR code not configured. Please ask administrator to upload the payment QR code.' });
 });
 
@@ -421,21 +417,9 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
     const raw     = fs.readFileSync(req.file.path, 'utf8');
     const records = parse(raw, { columns: true, skip_empty_lines: true, trim: true, bom: true });
     fs.unlinkSync(req.file.path);
-
     let errors = 0;
-
-    // Pre-load existing keys to avoid per-row DB lookups
-    const [existStuDocs, existCrsDocs] = await Promise.all([
-      db.students.findAsync({}, { email: 1 }),
-      db.student_courses.findAsync({}, { email_course: 1 }),
-    ]);
-    const stuSet = new Set(existStuDocs.map(s => s.email));
-    const crsSet = new Set(existCrsDocs.map(c => c.email_course));
-
-    const newStudents = new Map(); // email → doc (dedup by email)
-    const updStudents = new Map();
-    const newCourses  = [];
-    const updCourses  = [];
+    const studentMap = new Map();
+    const courseList = [];
 
     for (const row of records) {
       const sap_id      = flexGet(row, ['studentglobal','sapid','studentid','rollno','id']);
@@ -452,53 +436,30 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
 
       if (!email || !sap_id || !code) { errors++; continue; }
 
-      // Auto-derive category from grade: F=failed, AB=debarred, all others=improvement
       const category = deriveCategory(grade);
+      studentMap.set(email, { email, sap_id, name, school, program, program_code: programCode, semester });
 
-      // Student: classify as new or update
-      const stuDoc = { email, sap_id, name, school, program, program_code: programCode, semester };
-      if (!stuSet.has(email)) {
-        newStudents.set(email, stuDoc);
-        stuSet.add(email); // avoid duplicate in same CSV
-      } else {
-        updStudents.set(email, stuDoc);
-      }
-
-      // Course: classify as new or update
       const key = email + '_' + code;
-      const crsDoc = { email_course: key, email, course_code: code, course_name: cname, credits, grade, category };
-      if (!crsSet.has(key)) {
-        newCourses.push(crsDoc);
-        crsSet.add(key);
-      } else {
-        updCourses.push({ key, data: { course_name: cname, credits, grade, category } });
-      }
+      courseList.push({ email_course: key, email, course_code: code, course_name: cname, credits, grade, category });
     }
 
-    // Bulk insert all new records in one call each
-    const stuInsertList = [...newStudents.values()];
-    const crsInsertList = newCourses;
-    if (stuInsertList.length) await db.students.insertAsync(stuInsertList);
-    if (crsInsertList.length) await db.student_courses.insertAsync(crsInsertList);
-
-    // Updates in parallel chunks of 50
-    const CHUNK = 50;
-    const stuUpdateList = [...updStudents.values()];
-    for (let i = 0; i < stuUpdateList.length; i += CHUNK) {
-      await Promise.all(stuUpdateList.slice(i, i + CHUNK).map(s =>
-        db.students.updateAsync({ email: s.email }, { $set: s })
-      ));
+    // Bulk upsert students (chunks of 500)
+    const stuArr = [...studentMap.values()];
+    const CHUNK = 500;
+    for (let i = 0; i < stuArr.length; i += CHUNK) {
+      const { error: e } = await supabase.from('students').upsert(stuArr.slice(i, i + CHUNK), { onConflict: 'email' });
+      if (e) console.error('Student upsert error:', e.message);
     }
-    for (let i = 0; i < updCourses.length; i += CHUNK) {
-      await Promise.all(updCourses.slice(i, i + CHUNK).map(c =>
-        db.student_courses.updateAsync({ email_course: c.key }, { $set: c.data })
-      ));
+    // Bulk upsert courses
+    for (let i = 0; i < courseList.length; i += CHUNK) {
+      const { error: e } = await supabase.from('student_courses').upsert(courseList.slice(i, i + CHUNK), { onConflict: 'email_course' });
+      if (e) console.error('Course upsert error:', e.message);
     }
 
     res.json({
       success: true,
-      students: stuInsertList.length + stuUpdateList.length,
-      courses:  crsInsertList.length + updCourses.length,
+      students: stuArr.length,
+      courses:  courseList.length,
       errors,
       total: records.length
     });
@@ -509,52 +470,59 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
 });
 
 // Upload QR code image
-app.post('/api/admin/upload-qr', requireAdmin, upload.single('file'), (req, res) => {
+app.post('/api/admin/upload-qr', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const dest = path.join(__dirname, 'data', 'qr-code.png');
-  fs.renameSync(req.file.path, dest);
-  res.json({ success: true, message: 'QR code updated' });
+  try {
+    const buf = fs.readFileSync(req.file.path);
+    const b64 = buf.toString('base64');
+    fs.unlinkSync(req.file.path);
+    await supabase.from('settings').upsert({ key: 'qr_code', value: b64 }, { onConflict: 'key' });
+    res.json({ success: true, message: 'QR code updated' });
+  } catch (e) {
+    try { fs.unlinkSync(req.file.path); } catch {}
+    res.status(500).json({ error: 'Failed to upload QR code.' });
+  }
 });
 
 // Set UPI ID
 app.post('/api/admin/set-upi', requireAdmin, async (req, res) => {
   const { upi_id } = req.body;
-  await db.settings.updateAsync({ key: 'payment' }, { $set: { key: 'payment', upi_id } }, { upsert: true });
+  await supabase.from('settings').upsert({ key: 'upi_id', value: upi_id }, { onConflict: 'key' });
   res.json({ success: true });
 });
 
 // Stats
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
-  const [students, courses, submissions, pending, verified] = await Promise.all([
-    db.students.countAsync({}),
-    db.student_courses.countAsync({}),
-    db.submissions.countAsync({}),
-    db.submissions.countAsync({ payment_status: 'pending' }),
-    db.submissions.countAsync({ payment_status: 'verified' }),
+  const [s1, s2, s3, s4, s5] = await Promise.all([
+    supabase.from('students').select('*', { count: 'exact', head: true }),
+    supabase.from('student_courses').select('*', { count: 'exact', head: true }),
+    supabase.from('submissions').select('*', { count: 'exact', head: true }),
+    supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('payment_status', 'pending'),
+    supabase.from('submissions').select('*', { count: 'exact', head: true }).eq('payment_status', 'verified'),
   ]);
-  res.json({ students, courses, submissions, pending, verified });
+  res.json({ students: s1.count||0, courses: s2.count||0, submissions: s3.count||0, pending: s4.count||0, verified: s5.count||0 });
 });
 
 // All submissions
 app.get('/api/admin/submissions', requireAdmin, async (req, res) => {
-  const rows = await db.submissions.findAsync({}).sort({ submitted_at: -1 });
-  res.json(rows);
+  const { data: rows } = await supabase.from('submissions').select().order('submitted_at', { ascending: false });
+  res.json(rows || []);
 });
 
 // All students
 app.get('/api/admin/students', requireAdmin, async (req, res) => {
-  const rows = await db.students.findAsync({}).sort({ sap_id: 1 });
-  res.json(rows);
+  const { data: rows } = await supabase.from('students').select().order('sap_id');
+  res.json(rows || []);
 });
 
 // Verify payment → send confirmation email
 app.patch('/api/admin/submissions/:id/verify', requireAdmin, async (req, res) => {
-  const sub = await db.submissions.findOneAsync({ _id: req.params.id });
+  const { data: sub } = await supabase.from('submissions').select().eq('id', req.params.id).maybeSingle();
   if (!sub) return res.status(404).json({ error: 'Submission not found' });
 
-  await db.submissions.updateAsync({ _id: req.params.id }, { $set: { payment_status: 'verified', verified_at: new Date().toISOString() } });
+  await supabase.from('submissions').update({ payment_status: 'verified', verified_at: new Date().toISOString() }).eq('id', req.params.id);
 
-  const student = await db.students.findOneAsync({ email: sub.email });
+  const { data: student } = await supabase.from('students').select().eq('email', sub.email).maybeSingle();
   try {
     await sendMail(sub.email,
       `UPES Summer Semester — Registration Confirmed [${sub.app_no}]`,
@@ -567,9 +535,9 @@ app.patch('/api/admin/submissions/:id/verify', requireAdmin, async (req, res) =>
 
 // Reject submission
 app.patch('/api/admin/submissions/:id/reject', requireAdmin, async (req, res) => {
-  const sub = await db.submissions.findOneAsync({ _id: req.params.id });
+  const { data: sub } = await supabase.from('submissions').select().eq('id', req.params.id).maybeSingle();
   if (!sub) return res.status(404).json({ error: 'Not found' });
-  await db.submissions.updateAsync({ _id: req.params.id }, { $set: { payment_status: 'rejected' } });
+  await supabase.from('submissions').update({ payment_status: 'rejected' }).eq('id', req.params.id);
 
   try {
     await sendMail(sub.email,
@@ -589,13 +557,13 @@ app.patch('/api/admin/submissions/:id/reject', requireAdmin, async (req, res) =>
 
 // Delete submission
 app.delete('/api/admin/submissions/:id', requireAdmin, async (req, res) => {
-  await db.submissions.removeAsync({ _id: req.params.id }, {});
+  await supabase.from('submissions').delete().eq('id', req.params.id);
   res.json({ success: true });
 });
 
 // Export submissions CSV
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
-  const rows = await db.submissions.findAsync({}).sort({ submitted_at: -1 });
+  const { data: rows } = await supabase.from('submissions').select().order('submitted_at', { ascending: false });
   let maxC = 0;
   rows.forEach(r => { if ((r.courses||[]).length > maxC) maxC = r.courses.length; });
 
@@ -623,17 +591,17 @@ app.get('/api/admin/export', requireAdmin, async (req, res) => {
 
 // Clear collections
 app.delete('/api/admin/clear/:table', requireAdmin, async (req, res) => {
-  const map = { students: db.students, student_courses: db.student_courses, submissions: db.submissions, otps: db.otps };
-  if (!map[req.params.table]) return res.status(400).json({ error: 'Unknown collection' });
-  await map[req.params.table].removeAsync({}, { multi: true });
+  const allowed = ['students', 'student_courses', 'submissions', 'otps'];
+  if (!allowed.includes(req.params.table)) return res.status(400).json({ error: 'Unknown collection' });
+  await supabase.from(req.params.table).delete().gte('created_at', '1970-01-01');
   res.json({ success: true });
 });
 
 // Settings
 app.get('/api/admin/settings', requireAdmin, async (req, res) => {
-  const s = await db.settings.findOneAsync({ key: 'payment' });
-  const qrPath = path.join(__dirname, 'data', 'qr-code.png');
-  res.json({ upi_id: s?.upi_id || '', has_qr: fs.existsSync(qrPath) });
+  const { data: s } = await supabase.from('settings').select('value').eq('key', 'upi_id').maybeSingle();
+  const { data: qr } = await supabase.from('settings').select('key').eq('key', 'qr_code').maybeSingle();
+  res.json({ upi_id: s?.value || '', has_qr: !!qr });
 });
 
 // ── Page Routes ───────────────────────────────────────────────────────────────
