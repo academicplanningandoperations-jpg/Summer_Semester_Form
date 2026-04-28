@@ -9,7 +9,7 @@ const path       = require('path');
 const fs         = require('fs');
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Dirs ──────────────────────────────────────────────────────────────────────
@@ -267,12 +267,15 @@ app.get('/api/my-application', requireStudent, async (req, res) => {
 
 // Submit application
 app.post('/api/apply', requireStudent, async (req, res) => {
-  const { courses, payment_ref } = req.body;
+  const { courses, payment_ref, payment_screenshot } = req.body;
   const email    = req.user.email;
   const isStaff  = email.endsWith('@ddn.upes.ac.in');
 
   if (!isStaff && (!payment_ref || payment_ref.trim().length < 6)) {
     return res.status(400).json({ error: 'Please enter a valid UPI Transaction Reference ID.' });
+  }
+  if (!isStaff && !payment_screenshot) {
+    return res.status(400).json({ error: 'Please upload a screenshot of your payment.' });
   }
   if (!Array.isArray(courses) || courses.length === 0) {
     return res.status(400).json({ error: 'Please select at least one course.' });
@@ -315,6 +318,7 @@ app.post('/api/apply', requireStudent, async (req, res) => {
     courses:        validated,
     total_fee,
     payment_ref:    isStaff ? 'STAFF/FACULTY – NO FEE' : payment_ref.trim().toUpperCase(),
+    payment_screenshot: isStaff ? null : (payment_screenshot || null),
     payment_status: isStaff ? 'verified' : 'pending',
     submitted_at,
     verified_at:    null,
@@ -381,6 +385,34 @@ app.post('/api/apply', requireStudent, async (req, res) => {
   res.json({ success: true, app_no, submitted_at, payment_ref: finalRef, courses: validated, total_fee });
 });
 
+// Serve payment screenshot for admin (supports token via query string for new-tab viewing)
+app.get('/api/admin/screenshot/:id', async (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token || '';
+  try {
+    const p = jwt.verify(token, JWT_SECRET);
+    if (p.role !== 'admin') throw new Error();
+  } catch {
+    return res.status(401).json({ error: 'Admin session expired' });
+  }
+  try {
+    const { data: sub } = await supabase.from('submissions').select('payment_screenshot').eq('id', req.params.id).maybeSingle();
+    if (!sub || !sub.payment_screenshot) return res.status(404).json({ error: 'No screenshot found' });
+    // payment_screenshot is stored as data-URI e.g. "data:image/png;base64,iVBOR..."
+    const match = sub.payment_screenshot.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (match) {
+      const buf = Buffer.from(match[2], 'base64');
+      res.set('Content-Type', match[1]);
+      return res.send(buf);
+    }
+    // Fallback: raw base64 without prefix
+    const buf = Buffer.from(sub.payment_screenshot, 'base64');
+    res.set('Content-Type', 'image/png');
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load screenshot' });
+  }
+});
+
 // Payment info (QR code UPI ID)
 app.get('/api/payment/info', async (req, res) => {
   const { data: s } = await supabase.from('settings').select('value').eq('key', 'upi_id').maybeSingle();
@@ -440,7 +472,7 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
       studentMap.set(email, { email, sap_id, name, school, program, program_code: programCode, semester });
 
       const key = email + '_' + code;
-      courseList.push({ email_course: key, email, course_code: code, course_name: cname, credits, grade, category });
+      courseList.push({ email_course: key, email, course_code: code, course_name: cname, credits, grade, category, semester });
     }
 
     // Bulk upsert students (chunks of 500)
@@ -561,28 +593,33 @@ app.delete('/api/admin/submissions/:id', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// Export submissions CSV
+// Export submissions CSV — row-per-course format (student info repeats per course)
 app.get('/api/admin/export', requireAdmin, async (req, res) => {
   const { data: rows } = await supabase.from('submissions').select().order('submitted_at', { ascending: false });
-  let maxC = 0;
-  rows.forEach(r => { if ((r.courses||[]).length > maxC) maxC = r.courses.length; });
 
-  const headers = ['App No', 'Student Global ID', 'Name', 'Email', 'School', 'Program'];
-  for (let i = 1; i <= maxC; i++) headers.push(`Course ${i} Code`, `Course ${i} Name`, `Course ${i} Credits`, `Course ${i} Category`, `Course ${i} Fee`);
-  headers.push('Total Fee (₹)', 'Payment Ref', 'Payment Status', 'Submitted At (IST)', 'Verified At (IST)');
+  const headers = ['App No', 'Student Global ID', 'Name', 'Email', 'School', 'Program',
+                   'Course Code', 'Course Name', 'Credits', 'Category', 'Course Fee (₹)',
+                   'Total Fee (₹)', 'Payment Ref', 'Payment Status', 'Submitted At (IST)', 'Verified At (IST)'];
 
   const q  = v => `"${(v||'').toString().replace(/"/g,'""')}"`;
   const ist = d => d ? new Date(new Date(d).getTime()+5.5*60*60*1000).toISOString().replace('T',' ').replace('Z','') : '';
 
-  const lines = rows.map(r => {
-    const cells = [r.app_no, r.sap_id, r.student_name, r.email, r.school, r.program];
-    for (let i = 0; i < maxC; i++) {
-      const c = r.courses?.[i];
-      cells.push(c?.course_code||'', c?.course_name||'', c?.credits||'', c?.category||'', c?.fee||'');
+  const lines = [];
+  for (const r of rows) {
+    const courses = r.courses || [];
+    if (courses.length === 0) {
+      // Student with no courses (edge case) — still output a row
+      lines.push([r.app_no, r.sap_id, r.student_name, r.email, r.school, r.program,
+                  '', '', '', '', '',
+                  r.total_fee||'', r.payment_ref||'', r.payment_status||'', ist(r.submitted_at), ist(r.verified_at)].map(q).join(','));
+    } else {
+      for (const c of courses) {
+        lines.push([r.app_no, r.sap_id, r.student_name, r.email, r.school, r.program,
+                    c.course_code||'', c.course_name||'', c.credits||'', c.category||'', c.fee||'',
+                    r.total_fee||'', r.payment_ref||'', r.payment_status||'', ist(r.submitted_at), ist(r.verified_at)].map(q).join(','));
+      }
     }
-    cells.push(r.total_fee||'', r.payment_ref||'', r.payment_status||'', ist(r.submitted_at), ist(r.verified_at));
-    return cells.map(q).join(',');
-  });
+  }
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="summer_registrations_${new Date().toISOString().slice(0,10)}.csv"`);

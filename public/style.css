@@ -172,6 +172,44 @@ body {
   background: #F4F9FA; border-top: 1px solid var(--border-lt);
 }
 
+/* ── SEMESTER GROUPS (accordion inside tab panels) ────────────────────────── */
+.semester-group {
+  border-bottom: 1px solid var(--border-lt);
+}
+.semester-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; cursor: pointer;
+  background: #EEF7F9;
+  border-bottom: 1px solid var(--border-lt);
+  transition: background .15s;
+  user-select: none;
+}
+.semester-header:hover { background: var(--navy-light); }
+.sem-toggle {
+  font-size: 12px; color: var(--navy); width: 16px; text-align: center;
+  transition: transform .2s;
+}
+.sem-label {
+  font-size: 13px; font-weight: bold; color: var(--navy);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.sem-count {
+  font-size: 11px; color: var(--muted); margin-left: auto;
+  background: rgba(0,95,115,.08); padding: 2px 8px; border-radius: 2px;
+}
+.semester-body { }
+.semester-body.collapsed { display: none; }
+
+/* ── SCREENSHOT UPLOAD ────────────────────────────────────────────────────── */
+.screenshot-upload-area { position: relative; }
+.screenshot-thumb {
+  display: block; margin-top: 10px;
+  max-width: 200px; max-height: 200px;
+  border: 2px solid var(--border);
+  object-fit: contain;
+  background: #f9f9f9;
+}
+
 /* Category badges */
 .badge {
   display: inline-block; padding: 2px 9px;

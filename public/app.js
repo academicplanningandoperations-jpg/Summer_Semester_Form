@@ -196,34 +196,72 @@ function renderPanel(cat, courses) {
     return;
   }
 
-  const rows = courses.map((c, i) => `
-    <tr id="cr-${cat}-${i}">
-      <td style="text-align:center;">
-        <input type="checkbox" id="r-${cat}-${i}"
-               value="${esc(c.course_code)}" data-cat="${cat}" data-idx="${i}">
-      </td>
-      <td><label for="r-${cat}-${i}" style="cursor:pointer;font-weight:bold;">${esc(c.course_code)}</label></td>
-      <td><label for="r-${cat}-${i}" style="cursor:pointer;">${esc(c.course_name)}</label></td>
-      <td style="text-align:center;">${esc(c.grade||'—')}</td>
-      <td style="text-align:center;">${esc(String(c.credits||'0'))}</td>
-      <td style="text-align:right;font-weight:bold;">${rupee(calcFee(c.credits))}</td>
-    </tr>`).join('');
+  // Group courses by semester
+  const semMap = new Map();
+  courses.forEach((c, i) => {
+    const sem = c.semester || 'Other';
+    if (!semMap.has(sem)) semMap.set(sem, []);
+    semMap.get(sem).push({ ...c, _origIdx: i });
+  });
 
-  panel.innerHTML = `
-    <table class="course-table">
-      <thead>
-        <tr>
-          <th style="width:50px;text-align:center;">Select</th>
-          <th>Course Code</th>
-          <th>Course Name</th>
-          <th style="text-align:center;width:70px;">Grade</th>
-          <th style="text-align:center;width:70px;">Credits</th>
-          <th style="text-align:right;width:110px;">Fee (₹)</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="tab-note">* Fee = Credits &times; &#8377;3,000. Courses with zero credits are charged &#8377;3,000 flat.</div>`;
+  // Sort semesters numerically (1, 2, 3, ..., Other)
+  const semKeys = [...semMap.keys()].sort((a, b) => {
+    const na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    if (!isNaN(na)) return -1;
+    if (!isNaN(nb)) return 1;
+    return a.localeCompare(b);
+  });
+
+  let html = '';
+  for (const sem of semKeys) {
+    const semCourses = semMap.get(sem);
+    const semLabel = !isNaN(parseInt(sem)) ? `Semester ${sem}` : sem;
+    const groupId = `sg-${cat}-${sem.replace(/\s/g, '')}`;
+
+    const rows = semCourses.map(c => {
+      const i = c._origIdx;
+      return `
+      <tr id="cr-${cat}-${i}">
+        <td style="text-align:center;">
+          <input type="checkbox" id="r-${cat}-${i}"
+                 value="${esc(c.course_code)}" data-cat="${cat}" data-idx="${i}">
+        </td>
+        <td><label for="r-${cat}-${i}" style="cursor:pointer;font-weight:bold;">${esc(c.course_code)}</label></td>
+        <td><label for="r-${cat}-${i}" style="cursor:pointer;">${esc(c.course_name)}</label></td>
+        <td style="text-align:center;">${esc(c.grade||'—')}</td>
+        <td style="text-align:center;">${esc(String(c.credits||'0'))}</td>
+        <td style="text-align:right;font-weight:bold;">${rupee(calcFee(c.credits))}</td>
+      </tr>`;
+    }).join('');
+
+    html += `
+    <div class="semester-group">
+      <div class="semester-header" onclick="toggleSemGroup('${groupId}')">
+        <span class="sem-toggle" id="tog-${groupId}">&#9660;</span>
+        <span class="sem-label">${esc(semLabel)}</span>
+        <span class="sem-count">${semCourses.length} course${semCourses.length > 1 ? 's' : ''}</span>
+      </div>
+      <div class="semester-body" id="${groupId}">
+        <table class="course-table">
+          <thead>
+            <tr>
+              <th style="width:50px;text-align:center;">Select</th>
+              <th>Course Code</th>
+              <th>Course Name</th>
+              <th style="text-align:center;width:70px;">Grade</th>
+              <th style="text-align:center;width:70px;">Credits</th>
+              <th style="text-align:right;width:110px;">Fee (₹)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="tab-note">* Fee = Credits &times; &#8377;3,000. Courses with zero credits are charged &#8377;3,000 flat.</div>`;
+  panel.innerHTML = html;
 
   // Attach change handlers for each checkbox
   courses.forEach((c, i) => {
@@ -245,6 +283,14 @@ function renderPanel(cat, courses) {
       updateSummary();
     });
   });
+}
+
+function toggleSemGroup(id) {
+  const body = byId(id);
+  const tog  = byId(`tog-${id}`);
+  if (!body) return;
+  const hidden = body.classList.toggle('collapsed');
+  if (tog) tog.innerHTML = hidden ? '&#9654;' : '&#9660;';
 }
 
 function updateCounter() {
@@ -316,6 +362,8 @@ function proceedToPayment() {
 }
 
 /* ─── PAYMENT PAGE ───────────────────────────────────────────────────────── */
+let screenshotBase64 = null;
+
 async function initPayment() {
   fill('p-name',    studentData?.name);
   fill('p-sid',     studentData?.sap_id);
@@ -344,6 +392,44 @@ async function initPayment() {
   const amtEl = byId('instr-amt');
   if (amtEl) amtEl.textContent = totalFee.toLocaleString('en-IN');
 
+  // Screenshot upload handler
+  const ssInput = byId('inp-screenshot');
+  if (ssInput) {
+    ssInput.addEventListener('change', function() {
+      const file = this.files[0];
+      const preview = byId('screenshot-preview');
+      const nameEl  = byId('screenshot-name');
+      if (!file) {
+        screenshotBase64 = null;
+        if (preview) preview.classList.add('hidden');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showAlert('pay-alert', 'Screenshot file is too large. Maximum size is 5 MB.');
+        this.value = '';
+        screenshotBase64 = null;
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        showAlert('pay-alert', 'Please upload an image file (PNG, JPG, etc).');
+        this.value = '';
+        screenshotBase64 = null;
+        return;
+      }
+      hideAlert('pay-alert');
+      const reader = new FileReader();
+      reader.onload = e => {
+        screenshotBase64 = e.target.result;
+        if (preview) {
+          preview.src = screenshotBase64;
+          preview.classList.remove('hidden');
+        }
+        if (nameEl) nameEl.textContent = file.name;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   // Staff bypass notice
   if (isStaffEmail(studentData?.email)) {
     const txnField = byId('inp-txn');
@@ -351,6 +437,8 @@ async function initPayment() {
       txnField.placeholder = 'Not required for staff/faculty';
       txnField.style.background = '#F5F5F5';
     }
+    const ssField = byId('screenshot-field');
+    if (ssField) ssField.classList.add('hidden');
     const submitBtn = byId('btn-submit');
     if (submitBtn) submitBtn.textContent = '✓ SUBMIT APPLICATION (NO FEE)';
 
@@ -381,6 +469,7 @@ async function submitApplication() {
 
   if (!staff && !txn) return showAlert('pay-alert', 'Please enter your UPI Transaction Reference / UTR Number.');
   if (!staff && txn.length < 6) return showAlert('pay-alert', 'Transaction reference appears too short. Please verify and re-enter.');
+  if (!staff && !screenshotBase64) return showAlert('pay-alert', 'Please upload a screenshot of your payment.');
 
   const raw = sessionStorage.getItem('pending_courses');
   if (!raw) return showAlert('pay-alert', 'Session data lost. Please go back and re-select courses.');
@@ -391,7 +480,7 @@ async function submitApplication() {
     const res  = await fetch('/api/apply', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${studentToken}` },
-      body: JSON.stringify({ courses, payment_ref: txn || '' })
+      body: JSON.stringify({ courses, payment_ref: txn || '', payment_screenshot: screenshotBase64 || '' })
     });
     const data = await res.json();
     if (!res.ok) return showAlert('pay-alert', data.error || 'Submission failed. Please try again.');

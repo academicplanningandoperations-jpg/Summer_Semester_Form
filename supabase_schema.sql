@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS student_courses (
   credits TEXT,
   grade TEXT,
   category TEXT NOT NULL,
+  semester TEXT,
   email_course TEXT UNIQUE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   courses JSONB DEFAULT '[]'::jsonb,
   total_fee INTEGER DEFAULT 0,
   payment_ref TEXT,
+  payment_screenshot TEXT,
   payment_status TEXT DEFAULT 'pending',
   submitted_at TEXT,
   verified_at TEXT,

@@ -121,6 +121,16 @@
               Find this in your UPI app under: Payment History &rarr; Transaction Details.
             </div>
           </div>
+          <div class="field-group" style="max-width:480px;" id="screenshot-field">
+            <label class="field-label" for="inp-screenshot">Payment Screenshot *</label>
+            <div class="screenshot-upload-area">
+              <input type="file" id="inp-screenshot" accept="image/*">
+              <div class="field-hint" style="margin-top:4px;">
+                Upload a screenshot of your UPI payment confirmation. Max 5 MB. <span id="screenshot-name" style="font-weight:bold;color:var(--navy);"></span>
+              </div>
+              <img id="screenshot-preview" class="screenshot-thumb hidden" alt="Payment screenshot preview">
+            </div>
+          </div>
           <div id="pay-alert" class="alert alert-error hidden"></div>
           <div class="flex gap-8" style="flex-wrap:wrap;">
             <button class="btn btn-outline" onclick="history.back()">&#8592; Back to Course Selection</button>
