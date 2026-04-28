@@ -466,16 +466,32 @@ input[type="file"] {
   /* Portal header */
   .portal-ribbon { font-size: 13px !important; padding: 12px 14px !important; letter-spacing: 0.3px !important; }
 
-  /* ── MOBILE: Course table fix ── */
-  .tab-panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .semester-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .course-table { min-width: 540px; }
-  .course-table th { padding: 7px 8px; font-size: 10px; }
-  .course-table td { padding: 7px 8px; font-size: 12px; }
+  /* ── MOBILE: Prevent everything from overflowing viewport ── */
+  .form-section { max-width: 100%; overflow: hidden; }
 
-  /* Info table compact */
-  .info-table td { padding: 6px 8px; font-size: 12px; }
-  .info-table td.lbl { font-size: 10px; }
+  /* Scrollable table wrappers */
+  .tab-panel,
+  .semester-body,
+  #summary-card .section-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Course tables: set min-width so they scroll instead of squish */
+  .course-table { min-width: 520px; }
+  .course-table th { padding: 6px 6px; font-size: 10px; }
+  .course-table td { padding: 6px 6px; font-size: 11px; }
+
+  /* Counter bar compact */
+  .counter-bar { flex-direction: column; gap: 4px; font-size: 11px; padding: 6px 10px; }
+
+  /* Semester headers compact */
+  .semester-header { padding: 8px 10px; }
+  .sem-label { font-size: 12px; }
+
+  /* Info table: stack on mobile */
+  .info-table td { padding: 5px 8px; font-size: 11px; }
+  .info-table td.lbl { font-size: 10px; width: 35%; }
+  .info-table tr { display: flex; flex-wrap: wrap; }
+  .info-table td { flex: 1 1 auto; border: 1px solid var(--border-lt); }
+  .info-table td.lbl { flex: 0 0 35%; }
 }
 
 @media (max-width: 680px) {
