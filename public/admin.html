@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — UPES Summer Semester Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="portal-header">
+  <div class="portal-ribbon" style="padding:16px 24px;font-size:17px;letter-spacing:.5px;">
+    Summer Semester Registration Form &mdash; Admin Dashboard
+  </div>
+</header>
+
+<!-- ═══ LOGIN ═══════════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="page-wrap">
+    <div class="login-wrap" style="margin-top:32px;">
+      <div class="form-section">
+        <div class="section-title">&#9654;&nbsp; Admin Login</div>
+        <div class="section-body">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+            Enter the administrator password to access the dashboard.
+          </p>
+          <div class="field-group">
+            <label class="field-label" for="inp-pass">Administrator Password</label>
+            <input type="password" id="inp-pass" placeholder="Enter password">
+          </div>
+          <div id="login-alert" class="alert alert-error hidden"></div>
+          <button class="btn btn-navy btn-full btn-lg" onclick="adminLogin()">LOGIN &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ════════════════════════════════════════════════════════════ -->
+<div id="dashboard" class="hidden">
+  <div class="admin-wrap">
+
+    <!-- Top bar -->
+    <div class="admin-topbar">
+      <h1>&#9654;&nbsp; Admin Dashboard</h1>
+      <div class="flex gap-8">
+        <a href="/" target="_blank" class="btn btn-outline btn-sm">&#128279; Student Portal</a>
+        <button class="btn btn-outline btn-sm" onclick="adminLogout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-tile"><div class="stat-number" id="st-students">—</div><div class="stat-label">Students Loaded</div></div>
+      <div class="stat-tile"><div class="stat-number" id="st-courses">—</div><div class="stat-label">Course Records</div></div>
+      <div class="stat-tile"><div class="stat-number" id="st-submissions">—</div><div class="stat-label">Total Submissions</div></div>
+      <div class="stat-tile pending"><div class="stat-number" id="st-pending">—</div><div class="stat-label">Pending Verification</div></div>
+      <div class="stat-tile verified"><div class="stat-number" id="st-verified">—</div><div class="stat-label">Payments Verified</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-tab-bar">
+      <button class="admin-tab-btn active" onclick="switchAdminTab('tab-upload')">&#128228; Upload Data</button>
+      <button class="admin-tab-btn"        onclick="switchAdminTab('tab-payments')">&#128179; Payment Verification</button>
+      <button class="admin-tab-btn"        onclick="switchAdminTab('tab-submissions')">&#128203; All Submissions</button>
+      <button class="admin-tab-btn"        onclick="switchAdminTab('tab-students')">&#128101; Students</button>
+      <button class="admin-tab-btn"        onclick="switchAdminTab('tab-settings')">&#9881; Settings</button>
+    </div>
+
+    <!-- ── UPLOAD TAB ──────────────────────────────────────────────────────── -->
+    <div id="tab-upload" class="admin-panel active">
+
+      <div class="upload-grid">
+        <!-- Student + Course Data -->
+        <div class="upload-card" style="grid-column:1/-1;">
+          <h3>&#128228; Upload Student Eligibility Data (CSV)</h3>
+          <p>
+            Upload a <strong>flat CSV file</strong> containing one row per eligible course per student.<br>
+            Required columns: <code>Student Global ID, Student Name, Student Email, School Name, Program Name, Program Code, Semester, Course Code, Module Name, Credit Point, Final Grade</code><br>
+            <strong>Category</strong> is auto-derived from Final Grade: <code>F</code> = Failed, <code>AB</code> = Debarred, all others = Improvement.<br>
+            Column headers are flexible — variants like <code>SAP_ID</code>, <code>Credits</code>, <code>Course_Name</code> etc. are also matched.
+          </p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;">
+            <div style="flex:1;min-width:260px;">
+              <div class="file-row">
+                <input type="file" id="file-data" accept=".csv">
+                <button class="btn btn-navy" onclick="uploadData()" style="white-space:nowrap;">Upload</button>
+              </div>
+              <div id="res-data" class="upload-result"></div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="downloadSample()" style="margin-top:2px;">
+              &#11015; Download Sample CSV
+            </button>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-red btn-sm" onclick="clearTable('student_courses')">Clear All Course Data</button>
+            <button class="btn btn-red btn-sm" onclick="clearTable('students')">Clear All Students</button>
+            <button class="btn btn-red btn-sm" onclick="clearTable('submissions')">Clear All Submissions</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Share link -->
+      <div class="form-section">
+        <div class="section-title">&#128279;&nbsp; Student Portal Link</div>
+        <div class="section-body">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">Share this link with eligible students to access the registration form.</p>
+          <div class="flex gap-8">
+            <input type="text" id="share-link" readonly style="flex:1;font-family:monospace;font-size:13px;">
+            <button class="btn btn-navy" onclick="copyLink()">Copy Link</button>
+          </div>
+          <div id="copy-msg" class="hidden" style="font-size:12px;color:var(--green);margin-top:6px;">&#10003; Copied to clipboard!</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── PAYMENTS TAB ────────────────────────────────────────────────────── -->
+    <div id="tab-payments" class="admin-panel">
+      <div class="table-card">
+        <div class="table-head">
+          <h3>&#128179; Pending Payment Verification</h3>
+          <div class="table-actions">
+            <input class="search-box" type="text" id="search-pay" placeholder="Search…" oninput="filterPayments()">
+            <button class="btn-export" onclick="exportCSV()">&#11015; Export CSV</button>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>App No</th><th>Student Global ID</th><th>Name</th><th>Email</th>
+                <th>Courses</th><th>Total Fee</th><th>Payment Ref</th>
+                <th>Status</th><th>Submitted At</th><th style="text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="pay-tbody"><tr class="empty-row"><td colspan="10">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ALL SUBMISSIONS TAB ─────────────────────────────────────────────── -->
+    <div id="tab-submissions" class="admin-panel">
+      <div class="table-card">
+        <div class="table-head">
+          <h3>&#128203; All Submissions <span id="sub-badge" style="font-size:11px;background:var(--navy);color:white;padding:2px 8px;border-radius:2px;margin-left:6px;">0</span></h3>
+          <div class="table-actions">
+            <input class="search-box" type="text" id="search-sub" placeholder="Search…" oninput="filterSubmissions()">
+            <button class="btn-export" onclick="exportCSV()">&#11015; Export CSV</button>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>App No</th><th>Student Global ID</th><th>Name</th><th>School</th>
+                <th>Courses</th><th>Total Fee (₹)</th><th>Payment Ref</th>
+                <th>Status</th><th>Submitted At (IST)</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="sub-tbody"><tr class="empty-row"><td colspan="11">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STUDENTS TAB ────────────────────────────────────────────────────── -->
+    <div id="tab-students" class="admin-panel">
+      <div class="table-card">
+        <div class="table-head">
+          <h3>&#128101; Student Records <span id="stu-badge" style="font-size:11px;background:var(--navy);color:white;padding:2px 8px;border-radius:2px;margin-left:6px;">0</span></h3>
+          <div class="table-actions">
+            <input class="search-box" type="text" id="search-stu" placeholder="Search…" oninput="filterStudents()">
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Student Global ID</th><th>Name</th><th>Email</th><th>School</th><th>Program</th><th>Program Code</th><th>Semester</th></tr>
+            </thead>
+            <tbody id="stu-tbody"><tr class="empty-row"><td colspan="8">No students loaded.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS TAB ────────────────────────────────────────────────────── -->
+    <div id="tab-settings" class="admin-panel">
+      <div class="upload-grid">
+
+        <!-- UPI ID -->
+        <div class="upload-card">
+          <h3>&#128179; UPI Payment ID</h3>
+          <p>Set the UPI ID displayed to students on the payment page. Students will also see this on the QR code.</p>
+          <div class="field-group">
+            <label class="field-label">UPI ID</label>
+            <input type="text" id="inp-upi" placeholder="upes@bankname" style="font-family:monospace;">
+          </div>
+          <div id="upi-alert" class="upload-result"></div>
+          <button class="btn btn-navy" onclick="saveUPI()">Save UPI ID</button>
+        </div>
+
+        <!-- QR Code -->
+        <div class="upload-card">
+          <h3>&#128247; Payment QR Code</h3>
+          <p>Upload the UPI QR code image provided by the Accounts Department. PNG format recommended. Replaces any existing QR code.</p>
+          <div class="file-row">
+            <input type="file" id="file-qr" accept="image/*">
+            <button class="btn btn-navy" onclick="uploadQR()">Upload</button>
+          </div>
+          <div id="qr-alert" class="upload-result"></div>
+          <div id="qr-preview" style="margin-top:12px;"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /admin-wrap -->
+</div><!-- /dashboard -->
+
+<footer class="portal-footer">
+  &copy; 2025-26 University of Petroleum and Energy Studies, Dehradun. Administrator View.
+</footer>
+
+<script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Selection — UPES Summer Semester Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="portal-header">
+  <div class="portal-ribbon" style="padding:16px 24px;font-size:17px;letter-spacing:.5px;">
+    Summer Semester Registration Form &mdash; Academic Year 2025-26
+  </div>
+</header>
+
+<div class="page-wrap">
+
+  <div class="print-bar">
+    <span>Summer Semester Registration &mdash; Course Selection</span>
+    <div class="flex gap-8">
+      <button class="btn btn-outline btn-sm" onclick="window.print()">&#128438; Print</button>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps-bar">
+    <div class="step done"><div class="step-num">&#10003;</div>OTP Verification</div>
+    <div class="step active"><div class="step-num">2</div>Course Selection</div>
+    <div class="step"><div class="step-num">3</div>Fee Payment</div>
+    <div class="step"><div class="step-num">4</div>Confirmation</div>
+  </div>
+
+  <!-- Already submitted banner -->
+  <div id="already-applied" class="hidden"></div>
+
+  <!-- Candidate Details -->
+  <div class="form-section">
+    <div class="section-title">&#9654;&nbsp; Candidate Details</div>
+    <div style="padding:0;">
+      <table class="info-table">
+        <tr>
+          <td class="lbl">Full Name</td><td id="d-name">—</td>
+          <td class="lbl">Student Global ID</td><td id="d-sid">—</td>
+        </tr>
+        <tr>
+          <td class="lbl">School</td><td id="d-school">—</td>
+          <td class="lbl">Program</td><td id="d-program">—</td>
+        </tr>
+        <tr>
+          <td class="lbl">Email Address</td>
+          <td id="d-email" colspan="3">—</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- No Courses Message -->
+  <div id="no-courses" class="form-section hidden">
+    <div class="section-body">
+      <div class="alert alert-warn">
+        <strong>No eligible courses found.</strong><br>
+        You do not have any courses listed for Summer Semester registration. Please contact your School Academic Coordinator.
+      </div>
+    </div>
+  </div>
+
+  <!-- Course Selection -->
+  <div id="selection-card" class="form-section hidden">
+    <div class="section-title">&#9654;&nbsp; Step 2 — Course Selection &nbsp;<small style="font-weight:normal;font-size:11px;">(Maximum 2 courses across all categories)</small></div>
+
+    <!-- Counter bar -->
+    <div class="counter-bar">
+      <span>Select courses using the radio buttons below. Only courses listed under your name are shown.</span>
+      <span>Courses Selected: <span id="counter-num" class="counter-val">0</span> / 2</span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tbtn-debarred"    onclick="switchTab('debarred')">
+        Debarred Courses <span class="tab-count" id="cnt-debarred">0</span>
+      </button>
+      <button class="tab-btn"        id="tbtn-failed"      onclick="switchTab('failed')">
+        Failed Courses <span class="tab-count" id="cnt-failed">0</span>
+      </button>
+      <button class="tab-btn"        id="tbtn-improvement" onclick="switchTab('improvement')">
+        Improvement <span class="tab-count" id="cnt-improvement">0</span>
+      </button>
+    </div>
+
+    <div id="panel-debarred"    class="tab-panel"></div>
+    <div id="panel-failed"      class="tab-panel hidden"></div>
+    <div id="panel-improvement" class="tab-panel hidden"></div>
+  </div>
+
+  <!-- Summary + Proceed -->
+  <div id="summary-card" class="form-section hidden">
+    <div class="section-title">&#9654;&nbsp; Selected Courses &amp; Fee Summary</div>
+    <div class="section-body">
+      <div id="summary-table"></div>
+      <div id="proceed-alert" class="alert alert-error hidden"></div>
+      <div class="text-right mt-16">
+        <button class="btn btn-navy btn-lg" id="btn-proceed" onclick="proceedToPayment()">
+          PROCEED TO FEE PAYMENT &rarr;
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="portal-footer">
+  &copy; 2025-26 University of Petroleum and Energy Studies, Dehradun. All Rights Reserved.
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPES — Summer Semester Registration Portal 2025-26</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="portal-header">
+  <div class="portal-ribbon" style="padding:16px 24px;font-size:17px;letter-spacing:.5px;">
+    Summer Semester Registration Form &mdash; Academic Year 2025-26
+  </div>
+</header>
+
+<div class="page-wrap">
+
+  <!-- Steps -->
+  <div class="steps-bar">
+    <div class="step active"><div class="step-num">1</div>OTP Verification</div>
+    <div class="step"><div class="step-num">2</div>Course Selection</div>
+    <div class="step"><div class="step-num">3</div>Fee Payment</div>
+    <div class="step"><div class="step-num">4</div>Confirmation</div>
+  </div>
+
+  <!-- Notice -->
+  <div class="notice-box">
+    <div class="notice-title">⚠&nbsp; Important Instructions &mdash; Please Read Carefully Before Proceeding</div>
+    <ol>
+      <li>This portal is exclusively for Summer Semester course registration.</li>
+      <li>Use your UPES email to login: <strong>students</strong> use <code>@stu.upes.ac.in</code> only. Other addresses will not be accepted.</li>
+      <li>An OTP will be sent to your registered email. Enter it within <strong>10 minutes</strong>. Do not share your OTP with anyone.</li>
+      <li>A maximum of <strong>2 (Two) courses</strong> may be registered across all categories (Debarred / Failed / Improvement).</li>
+      <li>Fee once paid is <strong>non-refundable</strong>. Carefully verify course details before making payment.</li>
+      <li>For queries, contact your School Academic Coordinator or email: <strong>apo@ddn.upes.ac.in</strong></li>
+    </ol>
+  </div>
+
+  <!-- Login Box -->
+  <div class="login-wrap">
+    <div class="form-section">
+      <div class="section-title">&#9654;&nbsp; Step 1 of 4 &mdash; Student Identity Verification</div>
+
+      <!-- Email Step -->
+      <div id="step-email" class="section-body">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">
+          Enter your UPES student email address to receive a One-Time Password (OTP).
+        </p>
+        <div class="field-group">
+          <label class="field-label" for="inp-email">Student Email Address *</label>
+          <input type="email" id="inp-email" placeholder="yourname@stu.upes.ac.in" autocomplete="email">
+        </div>
+        <div id="email-alert" class="alert alert-error hidden"></div>
+        <button class="btn btn-navy btn-full btn-lg" id="btn-send" onclick="sendOTP()">
+          SEND OTP &rarr;
+        </button>
+      </div>
+
+      <!-- OTP Step -->
+      <div id="step-otp" class="section-body hidden">
+        <div class="alert alert-info mb-12">
+          An OTP has been sent to <strong id="otp-email-disp"></strong>.<br>
+          Please check your Inbox and Spam/Junk folder. OTP expires in <strong>10 minutes</strong>.
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="inp-otp">Enter OTP *</label>
+          <input type="text" id="inp-otp" class="otp-input" placeholder="&bull; &bull; &bull; &bull; &bull; &bull;"
+                 maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+        </div>
+        <div id="otp-alert" class="alert alert-error hidden"></div>
+        <button class="btn btn-navy btn-full btn-lg" id="btn-verify" onclick="verifyOTP()">
+          VERIFY &amp; PROCEED &rarr;
+        </button>
+        <div class="flex gap-8 mt-12">
+          <button class="btn btn-outline" onclick="backToEmail()" style="flex:1;">&#8592; Change Email</button>
+          <button class="btn btn-outline" id="btn-resend" onclick="resendOTP()" style="flex:1;">Resend OTP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="portal-footer">
+  &copy; 2025-26 University of Petroleum and Energy Studies, Dehradun. All Rights Reserved.<br>
+  Best viewed in Google Chrome, Mozilla Firefox or Microsoft Edge (latest versions).
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

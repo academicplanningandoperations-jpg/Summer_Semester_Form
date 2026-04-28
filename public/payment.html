@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fee Payment — UPES Summer Semester Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="portal-header">
+  <div class="portal-ribbon" style="padding:16px 24px;font-size:17px;letter-spacing:.5px;">
+    Summer Semester Registration Form &mdash; Academic Year 2025-26
+  </div>
+</header>
+
+<div class="page-wrap">
+
+  <div class="print-bar">
+    <span>Summer Semester Registration &mdash; Fee Payment</span>
+    <button class="btn btn-outline btn-sm" onclick="window.print()">&#128438; Print / Save PDF</button>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps-bar">
+    <div class="step done"><div class="step-num">&#10003;</div>OTP Verification</div>
+    <div class="step done"><div class="step-num">&#10003;</div>Course Selection</div>
+    <div class="step active" id="step3"><div class="step-num">3</div>Fee Payment</div>
+    <div class="step" id="step4"><div class="step-num">4</div>Confirmation</div>
+  </div>
+
+  <!-- ═══ PAYMENT FORM ═══════════════════════════════════════════════════════ -->
+  <div id="payment-area">
+
+    <!-- Fee Challan -->
+    <div class="form-section">
+      <div class="section-title">&#9654;&nbsp; Fee Challan &mdash; Summer Semester 2025-26</div>
+      <div style="padding:0;">
+        <table class="info-table">
+          <tr>
+            <td class="lbl">Student Name</td><td id="p-name">—</td>
+            <td class="lbl">Student Global ID</td><td id="p-sid">—</td>
+          </tr>
+          <tr>
+            <td class="lbl">School</td><td id="p-school">—</td>
+            <td class="lbl">Program</td><td id="p-program">—</td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:14px;">
+        <table class="course-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">#</th>
+              <th>Course Code</th>
+              <th>Course Name</th>
+              <th style="text-align:center;width:80px;">Credits</th>
+              <th style="width:100px;">Category</th>
+              <th style="text-align:right;width:120px;">Fee (&#8377;)</th>
+            </tr>
+          </thead>
+          <tbody id="fee-rows"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" style="text-align:right;padding:10px 12px;font-weight:bold;font-size:13px;">
+                TOTAL AMOUNT PAYABLE (&#8377;)
+              </td>
+              <td id="fee-total" style="text-align:right;padding:10px 12px;font-weight:bold;font-size:16px;color:var(--navy);">—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payment Instructions -->
+    <div class="form-section no-print" id="payment-section">
+      <div class="section-title">&#9654;&nbsp; Payment via UPI / QR Code</div>
+      <div class="section-body">
+        <div class="flex gap-12" style="flex-wrap:wrap;align-items:flex-start;">
+
+          <!-- QR code side -->
+          <div class="qr-box" style="flex:0 0 auto;">
+            <div style="font-size:11px;font-weight:bold;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">
+              Scan &amp; Pay via UPI
+            </div>
+            <div id="qr-wrap">
+              <img id="qr-img" src="/api/payment/qr-code" class="qr-image" alt="Payment QR Code"
+                   onerror="document.getElementById('qr-wrap').innerHTML='<div class=qr-placeholder>QR Code<br>not configured.<br>Contact admin.</div>'">
+            </div>
+            <div id="upi-id" class="upi-chip" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;">Pay the exact amount shown above</div>
+          </div>
+
+          <!-- Instructions side -->
+          <div style="flex:1;min-width:260px;">
+            <div class="notice-box">
+              <div class="notice-title">&#9888;&nbsp; Payment Instructions</div>
+              <ol>
+                <li>Open any UPI app (PhonePe, Google Pay, Paytm, BHIM, etc.)</li>
+                <li>Scan the QR code shown on the left</li>
+                <li>Enter the <strong>exact amount: &#8377;<span id="instr-amt">—</span></strong></li>
+                <li>Complete the payment and note the <strong>UPI Transaction Reference / UTR Number</strong></li>
+                <li>Enter that reference in the field below and click <strong>SUBMIT APPLICATION</strong></li>
+              </ol>
+            </div>
+            <div class="alert alert-warn mt-12" style="font-size:12px;">
+              &#9888; Do <strong>not</strong> close this page before submitting the reference number.
+              Fee once paid is <strong>non-refundable</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Transaction Ref Input -->
+        <div style="margin-top:20px;border-top:1px solid var(--border-lt);padding-top:16px;">
+          <div class="field-group" style="max-width:480px;">
+            <label class="field-label" for="inp-txn">UPI Transaction Reference / UTR Number *</label>
+            <input type="text" id="inp-txn" placeholder="e.g. 421234567890"
+                   style="text-transform:uppercase;"
+                   oninput="this.value=this.value.toUpperCase().replace(/\s/g,'')">
+            <div class="field-hint">
+              Find this in your UPI app under: Payment History &rarr; Transaction Details.
+            </div>
+          </div>
+          <div id="pay-alert" class="alert alert-error hidden"></div>
+          <div class="flex gap-8" style="flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="history.back()">&#8592; Back to Course Selection</button>
+            <button class="btn btn-green btn-lg" id="btn-submit" onclick="submitApplication()">
+              &#10003;&nbsp; SUBMIT APPLICATION
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /payment-area -->
+
+  <!-- ═══ CONFIRMATION ════════════════════════════════════════════════════════ -->
+  <div id="confirmation-area" class="hidden">
+    <div class="form-section">
+      <div class="section-title" style="background:#E8F5E9;color:var(--green);border-bottom-color:#A5D6A7;">
+        &#10003;&nbsp; Application Submitted Successfully &mdash; Step 4: Confirmation
+      </div>
+      <div class="section-body">
+
+        <div class="receipt-wrap">
+          <div class="receipt-head">
+            UPES Summer Semester Registration Receipt &mdash; Academic Year 2025-26
+          </div>
+          <div class="receipt-body">
+
+            <div class="text-center mb-12">
+              <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Application Reference Number</div>
+              <div class="app-number-display" id="conf-appno">—</div>
+            </div>
+
+            <table class="info-table mb-12">
+              <tr><td class="lbl">Student Name</td><td id="conf-name">—</td><td class="lbl">Student Global ID</td><td id="conf-sid">—</td></tr>
+              <tr><td class="lbl">Email</td><td id="conf-email" colspan="3">—</td></tr>
+            </table>
+
+            <table class="course-table mb-12">
+              <thead>
+                <tr><th>#</th><th>Course Code</th><th>Course Name</th><th style="text-align:center;">Credits</th><th>Category</th><th style="text-align:right;">Fee (&#8377;)</th></tr>
+              </thead>
+              <tbody id="conf-rows"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" style="text-align:right;padding:9px 12px;font-weight:bold;">Total Fee Paid (&#8377;)</td>
+                  <td id="conf-total" style="text-align:right;padding:9px 12px;font-weight:bold;font-size:15px;color:var(--navy);">—</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <table class="info-table mb-12">
+              <tr><td class="lbl">UPI Transaction Ref</td><td id="conf-txn">—</td></tr>
+              <tr><td class="lbl">Payment Status</td>
+                  <td><span class="status-pill pill-pending">Pending Verification</span></td></tr>
+              <tr><td class="lbl">Application Date &amp; Time</td><td id="conf-date">—</td></tr>
+            </table>
+
+            <div class="alert alert-info">
+              Your application has been received. A confirmation email has been sent to your registered email address.<br>
+              Your payment will be verified by the Accounts Department within <strong>1–2 working days</strong>.
+              A final confirmation email will be sent to you once the payment is verified.
+            </div>
+
+            <div class="flex gap-8 mt-16" style="justify-content:center;flex-wrap:wrap;">
+              <button class="btn btn-navy btn-lg" onclick="window.print()">&#128438; Print Receipt</button>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="portal-footer">
+  &copy; 2025-26 University of Petroleum and Energy Studies, Dehradun. All Rights Reserved.
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
