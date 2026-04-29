@@ -73,7 +73,7 @@ async function sendOTP() {
   try {
     const res  = await fetch('/api/send-otp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email}) });
     const data = await res.json();
-    if (!res.ok) return showAlert('email-alert', data.error || 'Failed to send OTP.');
+    if (!res.ok) { showAlert('email-alert', data.error || 'Failed to send OTP.'); return; }
     sessionStorage.setItem('pending_email', email);
     byId('otp-email-disp').textContent = email;
     byId('step-email').classList.add('hidden');
@@ -86,8 +86,7 @@ async function sendOTP() {
     });
     inp.addEventListener('keydown', e => { if (e.key==='Enter') verifyOTP(); });
   } catch { showAlert('email-alert', 'Network error. Please check your connection.'); }
-
-  setBtn('btn-send', false, 'SEND OTP →');
+  finally { setBtn('btn-send', false, 'SEND OTP →'); }
 }
 
 async function verifyOTP() {

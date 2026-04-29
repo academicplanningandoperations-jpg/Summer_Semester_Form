@@ -57,8 +57,18 @@ const transporter = DEV_MODE ? null : nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || '587', 10),
   secure: false,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  tls: { rejectUnauthorized: false }
+  tls: { rejectUnauthorized: false },
+  connectionTimeout: 10000,
+  greetingTimeout:   10000,
+  socketTimeout:     30000
 });
+
+// Verify SMTP connection on startup
+if (transporter) {
+  transporter.verify()
+    .then(() => console.log('✅ SMTP connection verified successfully.'))
+    .catch(err => console.error('⚠️  SMTP connection FAILED:', err.message, '— OTPs will NOT be delivered!'));
+}
 
 async function sendMail(to, subject, html) {
   if (DEV_MODE) {
@@ -232,8 +242,13 @@ app.post('/api/send-otp', async (req, res) => {
 
     res.json({ success: true, message: 'OTP sent to your registered email address.' });
   } catch (err) {
-    console.error('send-otp error:', err.message);
-    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+    console.error('send-otp error:', err.code || '', err.message);
+    const smtpCodes = ['ECONNREFUSED','ETIMEDOUT','ECONNRESET','ESOCKET','EAUTH','EENVELOPE'];
+    const isSmtp = smtpCodes.includes(err.code) || (err.message || '').toLowerCase().includes('smtp');
+    const userMsg = isSmtp
+      ? 'Email server is temporarily unavailable. OTP could not be sent. Please try again in a few minutes or contact the administrator.'
+      : 'Failed to send OTP. Please try again.';
+    res.status(500).json({ error: userMsg });
   }
 });
 
