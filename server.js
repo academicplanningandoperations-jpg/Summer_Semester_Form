@@ -6,17 +6,11 @@ const multer     = require('multer');
 const { parse }  = require('csv-parse/sync');
 const jwt        = require('jsonwebtoken');
 const path       = require('path');
-const fs         = require('fs');
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Dirs ──────────────────────────────────────────────────────────────────────
-['uploads'].forEach(d => {
-  const p = path.join(__dirname, d);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-});
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -246,7 +240,7 @@ function requireAdmin(req, res, next) {
   }
 }
 
-const upload = multer({ dest: path.join(__dirname, 'uploads'), limits: { fileSize: 100 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  STUDENT ROUTES
@@ -534,9 +528,8 @@ app.post('/api/admin/login', (req, res) => {
 app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const raw     = fs.readFileSync(req.file.path, 'utf8');
+    const raw     = req.file.buffer.toString('utf8');
     const records = parse(raw, { columns: true, skip_empty_lines: true, trim: true, bom: true });
-    fs.unlinkSync(req.file.path);
     let errors = 0;
     const studentMap = new Map();
     const courseList = [];
@@ -584,7 +577,6 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
       total: records.length
     });
   } catch (err) {
-    try { fs.unlinkSync(req.file.path); } catch {}
     res.status(500).json({ error: `Parse error: ${err.message}` });
   }
 });
@@ -593,13 +585,10 @@ app.post('/api/admin/upload-data', requireAdmin, upload.single('file'), async (r
 app.post('/api/admin/upload-qr', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const buf = fs.readFileSync(req.file.path);
-    const b64 = buf.toString('base64');
-    fs.unlinkSync(req.file.path);
+    const b64 = req.file.buffer.toString('base64');
     await supabase.from('settings').upsert({ key: 'qr_code', value: b64 }, { onConflict: 'key' });
     res.json({ success: true, message: 'QR code updated' });
   } catch (e) {
-    try { fs.unlinkSync(req.file.path); } catch {}
     res.status(500).json({ error: 'Failed to upload QR code.' });
   }
 });
@@ -759,10 +748,14 @@ app.get('/payment', (_, res) => res.sendFile(path.join(__dirname, 'public', 'pay
 app.get('/admin',   (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/',        (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`\nUPES Summer Semester Portal → http://localhost:${PORT}`);
-  console.log(`Admin panel               → http://localhost:${PORT}/admin`);
-  if (DEV_MODE) console.log('[DEV MODE] OTPs & emails logged to console\n');
-});
+// ── Start (local dev only — Vercel imports this module directly) ──────────────
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`\nUPES Summer Semester Portal → http://localhost:${PORT}`);
+    console.log(`Admin panel               → http://localhost:${PORT}/admin`);
+    if (DEV_MODE) console.log('[DEV MODE] OTPs & emails logged to console\n');
+  });
+}
+
+module.exports = app;
