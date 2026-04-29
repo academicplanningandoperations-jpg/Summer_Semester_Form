@@ -10,7 +10,10 @@
       "Bash(curl -s -X POST http://localhost:3000/api/admin/login -H 'Content-Type: application/json' -d '{\"password\":\"admin123\"}')",
       "Bash(curl -s -X POST http://localhost:3000/api/send-otp -H 'Content-Type: application/json' -d '{\"email\":\"demo@ddn.upes.ac.in\"}')",
       "Bash(netstat -ano)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

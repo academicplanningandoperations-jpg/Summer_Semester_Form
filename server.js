@@ -52,31 +52,69 @@ async function checkRegistrationWindow() {
 if (DEV_MODE) console.warn('\n[DEV MODE] SMTP not configured — OTPs printed to console.\n');
 
 // ── Email ─────────────────────────────────────────────────────────────────────
-const transporter = DEV_MODE ? null : nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.office365.com',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: false,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  tls: { rejectUnauthorized: false },
-  connectionTimeout: 10000,
-  greetingTimeout:   10000,
-  socketTimeout:     30000
-});
+function createTransporter() {
+  if (DEV_MODE) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.office365.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: false,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 20000,
+    greetingTimeout:   15000,
+    socketTimeout:     45000,
+    pool: false
+  });
+}
+
+let transporter = createTransporter();
 
 // Verify SMTP connection on startup
 if (transporter) {
   transporter.verify()
     .then(() => console.log('✅ SMTP connection verified successfully.'))
-    .catch(err => console.error('⚠️  SMTP connection FAILED:', err.message, '— OTPs will NOT be delivered!'));
+    .catch(err => console.error('⚠️  SMTP connection FAILED:', err.code, err.message, '— will retry on first send.'));
 }
 
-async function sendMail(to, subject, html) {
+// Retry logic: up to 3 attempts with exponential backoff
+async function sendMail(to, subject, html, retries = 3) {
   if (DEV_MODE) {
     console.log(`\n${'─'.repeat(60)}\n📧 [DEV EMAIL] To: ${to}\nSubject: ${subject}\n${'─'.repeat(60)}\n`);
     return;
   }
-  await transporter.sendMail({ from: process.env.SMTP_FROM || 'apo@ddn.upes.ac.in', to, subject, html });
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'apo@ddn.upes.ac.in';
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`📧 [SMTP] Attempt ${attempt}/${retries} → ${to}`);
+      await transporter.sendMail({ from, to, subject, html });
+      console.log(`✅ [SMTP] Email sent successfully to ${to} on attempt ${attempt}`);
+      return;
+    } catch (err) {
+      console.error(`❌ [SMTP] Attempt ${attempt}/${retries} failed:`, err.code, err.message);
+      if (attempt < retries) {
+        const delay = attempt * 3000; // 3s, 6s backoff
+        console.log(`⏳ [SMTP] Retrying in ${delay/1000}s... (recreating transporter)`);
+        await new Promise(r => setTimeout(r, delay));
+        // Recreate transporter to get a fresh connection
+        transporter = createTransporter();
+      } else {
+        throw err; // All retries exhausted
+      }
+    }
+  }
 }
+
+// Diagnostic endpoint — check SMTP health (admin or public, no sensitive data exposed)
+app.get('/api/smtp-check', async (req, res) => {
+  if (DEV_MODE) return res.json({ status: 'dev_mode', message: 'SMTP not configured — running in dev mode.' });
+  try {
+    transporter = createTransporter(); // fresh connection for test
+    await transporter.verify();
+    res.json({ status: 'ok', message: 'SMTP connection successful', host: process.env.SMTP_HOST || 'smtp.office365.com' });
+  } catch (err) {
+    res.json({ status: 'error', code: err.code, message: err.message, host: process.env.SMTP_HOST || 'smtp.office365.com' });
+  }
+});
 
 function otpEmailHtml(name, otp) {
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">
