@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express    = require('express');
 const { createClient } = require('@supabase/supabase-js');
-const nodemailer = require('nodemailer');
 const multer     = require('multer');
 const { parse }  = require('csv-parse/sync');
 const jwt        = require('jsonwebtoken');
@@ -22,7 +21,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
 // ── Config ────────────────────────────────────────────────────────────────────
 const JWT_SECRET  = process.env.JWT_SECRET    || 'dev-insecure-secret';
 const ADMIN_PASS  = process.env.ADMIN_PASSWORD || 'admin123';
-const DEV_MODE    = !process.env.SMTP_USER;
+const DEV_MODE    = !process.env.POWER_AUTOMATE_URL;
 
 // Fetch dynamic settings from DB
 async function getSettingValue(key, fallback) {
@@ -43,71 +42,45 @@ async function checkRegistrationWindow() {
   return { open: true, start, end };
 }
 
-if (DEV_MODE) console.warn('\n[DEV MODE] SMTP not configured — OTPs printed to console.\n');
+if (DEV_MODE) console.warn('\n[DEV MODE] POWER_AUTOMATE_URL not set — OTPs printed to console.\n');
 
-// ── Email ─────────────────────────────────────────────────────────────────────
-function createTransporter() {
-  if (DEV_MODE) return null;
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.office365.com',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 20000,
-    greetingTimeout:   15000,
-    socketTimeout:     45000,
-    pool: false
-  });
-}
-
-let transporter = createTransporter();
-
-// Verify SMTP connection on startup
-if (transporter) {
-  transporter.verify()
-    .then(() => console.log('✅ SMTP connection verified successfully.'))
-    .catch(err => console.error('⚠️  SMTP connection FAILED:', err.code, err.message, '— will retry on first send.'));
-}
-
-// Retry logic: up to 3 attempts with exponential backoff
+// ── Email via Power Automate ───────────────────────────────────────────────────
 async function sendMail(to, subject, html, retries = 3) {
   if (DEV_MODE) {
     console.log(`\n${'─'.repeat(60)}\n📧 [DEV EMAIL] To: ${to}\nSubject: ${subject}\n${'─'.repeat(60)}\n`);
     return;
   }
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'apo@ddn.upes.ac.in';
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`📧 [SMTP] Attempt ${attempt}/${retries} → ${to}`);
-      await transporter.sendMail({ from, to, subject, html });
-      console.log(`✅ [SMTP] Email sent successfully to ${to} on attempt ${attempt}`);
+      console.log(`📧 [MAIL] Attempt ${attempt}/${retries} → ${to}`);
+      const response = await fetch(process.env.POWER_AUTOMATE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, body: html })
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Power Automate HTTP ${response.status}: ${text.slice(0, 300)}`);
+      }
+      console.log(`✅ [MAIL] Email sent to ${to} on attempt ${attempt}`);
       return;
     } catch (err) {
-      console.error(`❌ [SMTP] Attempt ${attempt}/${retries} failed:`, err.code, err.message);
+      console.error(`❌ [MAIL] Attempt ${attempt}/${retries} failed:`, err.message);
       if (attempt < retries) {
-        const delay = attempt * 3000; // 3s, 6s backoff
-        console.log(`⏳ [SMTP] Retrying in ${delay/1000}s... (recreating transporter)`);
+        const delay = attempt * 3000;
+        console.log(`⏳ [MAIL] Retrying in ${delay / 1000}s...`);
         await new Promise(r => setTimeout(r, delay));
-        // Recreate transporter to get a fresh connection
-        transporter = createTransporter();
       } else {
-        throw err; // All retries exhausted
+        throw err;
       }
     }
   }
 }
 
-// Diagnostic endpoint — check SMTP health (admin or public, no sensitive data exposed)
-app.get('/api/smtp-check', async (req, res) => {
-  if (DEV_MODE) return res.json({ status: 'dev_mode', message: 'SMTP not configured — running in dev mode.' });
-  try {
-    transporter = createTransporter(); // fresh connection for test
-    await transporter.verify();
-    res.json({ status: 'ok', message: 'SMTP connection successful', host: process.env.SMTP_HOST || 'smtp.office365.com' });
-  } catch (err) {
-    res.json({ status: 'error', code: err.code, message: err.message, host: process.env.SMTP_HOST || 'smtp.office365.com' });
-  }
+// Diagnostic endpoint
+app.get('/api/email-check', async (_, res) => {
+  if (DEV_MODE) return res.json({ status: 'dev_mode', message: 'POWER_AUTOMATE_URL not set — running in dev mode.' });
+  res.json({ status: 'ok', message: 'Power Automate email configured', url_set: !!process.env.POWER_AUTOMATE_URL });
 });
 
 function otpEmailHtml(name, otp) {
@@ -275,11 +248,7 @@ app.post('/api/send-otp', async (req, res) => {
     res.json({ success: true, message: 'OTP sent to your registered email address.' });
   } catch (err) {
     console.error('send-otp error:', err.code || '', err.message);
-    const smtpCodes = ['ECONNREFUSED','ETIMEDOUT','ECONNRESET','ESOCKET','EAUTH','EENVELOPE'];
-    const isSmtp = smtpCodes.includes(err.code) || (err.message || '').toLowerCase().includes('smtp');
-    const userMsg = isSmtp
-      ? 'Email server is temporarily unavailable. OTP could not be sent. Please try again in a few minutes or contact the administrator.'
-      : 'Failed to send OTP. Please try again.';
+    const userMsg = 'OTP could not be sent. Please try again in a few minutes or contact the administrator.';
     res.status(500).json({ error: userMsg });
   }
 });
