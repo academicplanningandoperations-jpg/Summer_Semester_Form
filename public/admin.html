@@ -43,7 +43,13 @@
     <!-- Top bar -->
     <div class="admin-topbar">
       <h1>&#9654;&nbsp; Admin Dashboard</h1>
-      <div class="flex gap-8">
+      <div class="flex gap-8" style="align-items:center;">
+        <div class="theme-switcher">
+          <span class="theme-switcher-label">Theme</span>
+          <div class="theme-dot active" data-theme="teal"   title="Teal (Default)" onclick="setAdminTheme('teal')"></div>
+          <div class="theme-dot"        data-theme="blue"   title="Royal Blue"     onclick="setAdminTheme('blue')"></div>
+          <div class="theme-dot"        data-theme="maroon" title="Maroon"         onclick="setAdminTheme('maroon')"></div>
+        </div>
         <a href="/" target="_blank" class="btn btn-outline btn-sm">&#128279; Student Portal</a>
         <button class="btn btn-outline btn-sm" onclick="adminLogout()">Logout</button>
       </div>

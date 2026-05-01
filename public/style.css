@@ -30,6 +30,67 @@ body {
   min-height: 100vh;
 }
 
+/* ── THEME VARIABLES ───────────────────────────────────────────────────────── */
+/* Default (Teal) is set in :root above. Override per theme: */
+body.theme-blue {
+  --navy:       #1565C0;
+  --navy-dark:  #0D47A1;
+  --navy-light: #DBEAFE;
+  --border:     #93C5FD;
+  --border-lt:  #BFDBFE;
+  --muted:      #3B6EAF;
+  --stripe:     #EFF6FF;
+  --bg:         #E2EDF8;
+}
+body.theme-maroon {
+  --navy:       #880E4F;
+  --navy-dark:  #560027;
+  --navy-light: #FCE4EC;
+  --border:     #F48FB1;
+  --border-lt:  #F8BBD9;
+  --muted:      #8B3A5A;
+  --stripe:     #FDF2F5;
+  --bg:         #F2DDE5;
+}
+body.theme-blue  .portal-header { background: linear-gradient(180deg, #0D47A1 0%, #1565C0 100%); }
+body.theme-maroon .portal-header { background: linear-gradient(180deg, #560027 0%, #880E4F 100%); }
+
+/* ── THEME SWITCHER (admin only) ────────────────────────────────────────────── */
+.theme-switcher {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+}
+.theme-switcher-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: .4px;
+  margin-right: 2px;
+  text-transform: uppercase;
+}
+.theme-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.theme-dot:hover { transform: scale(1.15); }
+.theme-dot.active {
+  border-color: #333;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.12);
+  transform: scale(1.18);
+}
+.theme-dot[data-theme="teal"]   { background: #005F73; }
+.theme-dot[data-theme="blue"]   { background: #1565C0; }
+.theme-dot[data-theme="maroon"] { background: #880E4F; }
+
 /* ── PORTAL HEADER ─────────────────────────────────────────────────────────── */
 .portal-header {
   background: linear-gradient(180deg, #003E4E 0%, #005F73 100%);

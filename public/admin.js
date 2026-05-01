@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const saved = sessionStorage.getItem('admin_token');
   if (saved) { adminToken = saved; showDashboard(); }
   byId('inp-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); });
+  applyAdminTheme(localStorage.getItem('admin_theme') || 'teal');
 });
 
 /* ─── Utilities ──────────────────────────────────────────────────────────── */
@@ -480,6 +481,21 @@ async function submitManualEntry() {
     alertEl.textContent = 'Network error. Please try again.';
     alertEl.classList.remove('hidden');
   }
+}
+
+/* ─── Theme Switcher ─────────────────────────────────────────────────────── */
+function applyAdminTheme(theme) {
+  document.body.classList.remove('theme-blue', 'theme-maroon');
+  if (theme === 'blue')   document.body.classList.add('theme-blue');
+  if (theme === 'maroon') document.body.classList.add('theme-maroon');
+  document.querySelectorAll('.theme-dot').forEach(dot => {
+    dot.classList.toggle('active', dot.dataset.theme === theme);
+  });
+}
+
+function setAdminTheme(theme) {
+  localStorage.setItem('admin_theme', theme);
+  applyAdminTheme(theme);
 }
 
 /* ─── Sample CSV ─────────────────────────────────────────────────────────── */
