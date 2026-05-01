@@ -1,3 +1,21 @@
+/* ─── Success animation ──────────────────────────────────────────────────── */
+function showSuccessAnimation(title, subtitle, callback) {
+  const overlay = document.createElement('div');
+  overlay.className = 'success-overlay';
+  overlay.innerHTML = `
+    <div class="success-box">
+      <div class="success-circle"><span class="success-check">✓</span></div>
+      <div class="success-title">${title}</div>
+      <div class="success-sub">${subtitle}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.style.transition = 'opacity .3s ease';
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.remove(); if (callback) callback(); }, 300);
+  }, 1600);
+}
+
 /* ─── Shared state ───────────────────────────────────────────────────────── */
 let studentToken = null;
 let studentData  = null;
@@ -102,7 +120,9 @@ async function verifyOTP() {
     if (!res.ok) return showAlert('otp-alert', data.error || 'Invalid OTP. Please try again.');
     sessionStorage.setItem('student_token', data.token);
     sessionStorage.setItem('student_data', JSON.stringify(data.student));
-    window.location.href = '/apply';
+    showSuccessAnimation('Identity Verified!', 'Redirecting to course selection…', () => {
+      window.location.href = '/apply';
+    });
   } catch { showAlert('otp-alert', 'Network error. Please try again.'); }
 
   setBtn('btn-verify', false, 'VERIFY & PROCEED →');
@@ -573,7 +593,9 @@ async function submitApplication() {
     if (!res.ok) return showAlert('pay-alert', data.error || 'Submission failed. Please try again.');
     sessionStorage.removeItem('pending_courses');
     sessionStorage.setItem('last_confirmation', JSON.stringify(data));
-    showConfirmation(data);
+    showSuccessAnimation('Application Submitted!', 'Your registration has been received.', () => {
+      showConfirmation(data);
+    });
   } catch { showAlert('pay-alert', 'Network error. Please try again.'); }
 
   setBtn('btn-submit', false, '✓ SUBMIT APPLICATION');
