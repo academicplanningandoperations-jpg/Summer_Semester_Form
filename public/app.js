@@ -420,11 +420,30 @@ function switchTab(cat) {
   });
 }
 
-function proceedToPayment() {
+async function proceedToPayment() {
   hideAlert('proceed-alert');
   if (!selection.length) return showAlert('proceed-alert', 'Please select at least one course to proceed.');
-  // Strip internal _key before storing
+
   const toStore = selection.map(({ _key, ...rest }) => rest);
+
+  const btn = byId('btn-proceed');
+  if (btn) { btn.disabled = true; btn.textContent = 'Please wait…'; }
+
+  try {
+    const res  = await fetch('/api/lock-selection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${studentToken}` },
+      body: JSON.stringify({ courses: toStore })
+    });
+    const data = await res.json();
+    if (!res.ok) { showAlert('proceed-alert', data.error || 'Failed to proceed. Please try again.'); return; }
+  } catch {
+    showAlert('proceed-alert', 'Network error. Please try again.');
+    return;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Proceed to Payment →'; }
+  }
+
   sessionStorage.setItem('pending_courses', JSON.stringify(toStore));
   window.location.href = '/payment';
 }
@@ -588,4 +607,10 @@ function showConfirmation(data) {
     </tr>`;
   }).join('');
   fill('conf-total', rupee(total));
+
+  // Clear auth session — not needed after submission, prevents shared-computer access
+  sessionStorage.removeItem('student_token');
+  sessionStorage.removeItem('student_data');
+  studentToken = null;
+  studentData  = null;
 }

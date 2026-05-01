@@ -260,13 +260,32 @@ app.post('/api/verify-otp', async (req, res) => {
   if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
   try {
-    const { data: record } = await supabase.from('otps').select().eq('email', email).eq('otp', otp).eq('used', false).gt('expires_at', Date.now()).limit(1).maybeSingle();
+    const { data: record } = await supabase.from('otps').select()
+      .eq('email', email).eq('used', false).gt('expires_at', Date.now())
+      .order('expires_at', { ascending: false }).limit(1).maybeSingle();
+
     if (!record) return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new one.' });
+
+    if ((record.attempts || 0) >= 5) {
+      await supabase.from('otps').update({ used: true }).eq('id', record.id);
+      return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+    }
+
+    if (record.otp !== otp) {
+      const newAttempts = (record.attempts || 0) + 1;
+      if (newAttempts >= 5) {
+        await supabase.from('otps').update({ used: true, attempts: newAttempts }).eq('id', record.id);
+        return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+      }
+      await supabase.from('otps').update({ attempts: newAttempts }).eq('id', record.id);
+      const remaining = 5 - newAttempts;
+      return res.status(400).json({ error: `Incorrect OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
+    }
 
     await supabase.from('otps').update({ used: true }).eq('id', record.id);
 
     const { data: student } = await supabase.from('students').select().eq('email', email).maybeSingle();
-    const token   = jwt.sign({ email, role: 'student' }, JWT_SECRET, { expiresIn: '3h' });
+    const token = jwt.sign({ email, role: 'student' }, JWT_SECRET, { expiresIn: '3h' });
 
     res.json({
       success: true, token,
@@ -311,43 +330,53 @@ app.get('/api/my-application', requireStudent, async (req, res) => {
   res.json({ exists: true, application: sub });
 });
 
-// Submit application
-app.post('/api/apply', requireStudent, async (req, res) => {
-  const { courses, payment_ref, payment_screenshot } = req.body;
-  const email    = req.user.email;
-  const isStaff  = email.endsWith('@ddn.upes.ac.in');
+// Lock course selection server-side when student proceeds to payment
+app.post('/api/lock-selection', requireStudent, async (req, res) => {
+  const { courses } = req.body;
+  const email = req.user.email;
 
-  if (!isStaff && (!payment_ref || payment_ref.trim().length < 6)) {
-    return res.status(400).json({ error: 'Please enter a valid UPI Transaction Reference ID.' });
-  }
-  if (!isStaff && !payment_screenshot) {
-    return res.status(400).json({ error: 'Please upload a screenshot of your payment.' });
-  }
-  // Check registration window
   const regWindow = await checkRegistrationWindow();
   if (!regWindow.open) return res.status(403).json({ error: regWindow.reason });
 
   const maxCourses = await getMaxCourses();
-  if (!Array.isArray(courses) || courses.length === 0) {
+  if (!Array.isArray(courses) || courses.length === 0)
     return res.status(400).json({ error: 'Please select at least one course.' });
-  }
-  if (courses.length > maxCourses) {
+  if (courses.length > maxCourses)
     return res.status(400).json({ error: `Maximum ${maxCourses} courses allowed.` });
-  }
 
-  // Validate each course against student's eligible list
   const validated = [];
   for (const c of courses) {
     const { data: dbCourse } = await supabase.from('student_courses').select().eq('email', email).eq('course_code', c.course_code).maybeSingle();
-    if (!dbCourse) return res.status(400).json({ error: `Course ${c.course_code} is not in your eligible course list.` });
-    validated.push({
-      course_code: dbCourse.course_code,
-      course_name: dbCourse.course_name,
-      credits:     dbCourse.credits,
-      category:    dbCourse.category,
-      fee:         calcFee(dbCourse.credits)
-    });
+    if (!dbCourse) return res.status(400).json({ error: `Course ${c.course_code} is not in your eligible list.` });
+    validated.push({ course_code: dbCourse.course_code, course_name: dbCourse.course_name, credits: dbCourse.credits, category: dbCourse.category, fee: calcFee(dbCourse.credits) });
   }
+
+  await supabase.from('pending_selections').upsert({ email, courses: validated, locked_at: new Date().toISOString() }, { onConflict: 'email' });
+  res.json({ success: true });
+});
+
+// Submit application
+app.post('/api/apply', requireStudent, async (req, res) => {
+  const { payment_ref, payment_screenshot } = req.body;
+  const email   = req.user.email;
+  const isStaff = email.endsWith('@ddn.upes.ac.in');
+
+  if (!isStaff && (!payment_ref || payment_ref.trim().length < 6))
+    return res.status(400).json({ error: 'Please enter a valid UPI Transaction Reference ID.' });
+  if (!isStaff && !payment_screenshot)
+    return res.status(400).json({ error: 'Please upload a screenshot of your payment.' });
+
+  const regWindow = await checkRegistrationWindow();
+  if (!regWindow.open) return res.status(403).json({ error: regWindow.reason });
+
+  // Use server-locked course selection — not client data
+  const { data: lockedSel } = await supabase.from('pending_selections').select().eq('email', email).maybeSingle();
+  if (!lockedSel) return res.status(400).json({ error: 'Session expired. Please go back and re-select your courses.' });
+  const validated = lockedSel.courses;
+
+  const maxCourses = await getMaxCourses();
+  if (!validated.length || validated.length > maxCourses)
+    return res.status(400).json({ error: `Please select between 1 and ${maxCourses} courses.` });
 
   const { data: existing } = await supabase.from('submissions').select().eq('email', email).maybeSingle();
   if (existing) {
@@ -375,6 +404,8 @@ app.post('/api/apply', requireStudent, async (req, res) => {
     verified_at:    null,
     ip_address:     ip
   });
+
+  await supabase.from('pending_selections').delete().eq('email', email);
 
   // Send "application received" email
   try {
