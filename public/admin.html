@@ -147,6 +147,7 @@
           <h3>&#128203; All Submissions <span id="sub-badge" style="font-size:11px;background:var(--navy);color:white;padding:2px 8px;border-radius:2px;margin-left:6px;">0</span></h3>
           <div class="table-actions">
             <input class="search-box" type="text" id="search-sub" placeholder="Search…" oninput="filterSubmissions()">
+            <button class="btn btn-navy btn-sm" onclick="openManualEntry()" style="white-space:nowrap;">&#43; Manual Entry</button>
             <button class="btn-export" onclick="exportCSV()">&#11015; Export CSV</button>
           </div>
         </div>
@@ -254,6 +255,60 @@
 <footer class="portal-footer">
   &copy; 2025-26 University of Petroleum and Energy Studies, Dehradun. Administrator View.
 </footer>
+
+<!-- ═══ MANUAL ENTRY MODAL ═══════════════════════════════════════════════════ -->
+<div id="manual-entry-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;overflow-y:auto;padding:24px;">
+  <div style="background:white;max-width:540px;margin:0 auto;border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+    <div style="background:var(--navy);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:4px 4px 0 0;">
+      <strong>&#43; Add Manual Submission Entry</strong>
+      <button onclick="closeManualEntry()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;">&times;</button>
+    </div>
+    <div style="padding:20px;">
+
+      <!-- Step 1: Email lookup -->
+      <div id="me-step1">
+        <div class="field-group">
+          <label class="field-label">Student Email *</label>
+          <div class="flex gap-8">
+            <input type="email" id="me-email" placeholder="student@stu.upes.ac.in" style="flex:1;" onkeydown="if(event.key==='Enter')lookupStudentForManual()">
+            <button class="btn btn-navy" onclick="lookupStudentForManual()">Lookup</button>
+          </div>
+        </div>
+        <div id="me-lookup-alert" class="alert alert-error hidden"></div>
+      </div>
+
+      <!-- Step 2: Details (shown after lookup) -->
+      <div id="me-step2" class="hidden">
+        <div id="me-student-info" style="background:#f0f4f8;border:1px solid var(--border);padding:10px 14px;border-radius:3px;margin-bottom:14px;font-size:13px;"></div>
+
+        <div class="field-group">
+          <label class="field-label">Select Courses *</label>
+          <div id="me-courses" style="border:1px solid var(--border);padding:10px;border-radius:3px;max-height:220px;overflow-y:auto;"></div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Payment / Transaction Reference</label>
+          <input type="text" id="me-payment-ref" placeholder="UPI Transaction ID or leave blank for MANUAL ENTRY">
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Payment Status *</label>
+          <select id="me-payment-status" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:3px;">
+            <option value="verified">Verified</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+
+        <div id="me-submit-alert" class="alert alert-error hidden" style="margin-bottom:10px;"></div>
+        <div class="flex gap-8">
+          <button class="btn btn-outline" onclick="resetManualEntry()" style="flex:1;">&#8592; Change Email</button>
+          <button class="btn btn-green" onclick="submitManualEntry()" style="flex:2;">&#10003; Add Entry</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <script src="admin.js"></script>
 </body>

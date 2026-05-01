@@ -389,6 +389,99 @@ function copyLink() {
   });
 }
 
+/* ─── Manual Entry ───────────────────────────────────────────────────────── */
+function openManualEntry() {
+  byId('manual-entry-modal').style.display = 'block';
+  resetManualEntry();
+}
+
+function closeManualEntry() {
+  byId('manual-entry-modal').style.display = 'none';
+}
+
+function resetManualEntry() {
+  byId('me-email').value = '';
+  byId('me-payment-ref').value = '';
+  byId('me-payment-status').value = 'verified';
+  byId('me-step2').classList.add('hidden');
+  byId('me-lookup-alert').classList.add('hidden');
+  byId('me-submit-alert').classList.add('hidden');
+}
+
+async function lookupStudentForManual() {
+  const email = (byId('me-email').value || '').trim().toLowerCase();
+  if (!email) return;
+  const alertEl = byId('me-lookup-alert');
+  alertEl.classList.add('hidden');
+  byId('me-step2').classList.add('hidden');
+  try {
+    const res  = await api('GET', `/api/admin/student-lookup?email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      alertEl.textContent = data.error || 'Lookup failed.';
+      alertEl.classList.remove('hidden');
+      return;
+    }
+    const s = data.student;
+    byId('me-student-info').innerHTML =
+      `<strong>${esc(s.name)}</strong> &nbsp;|&nbsp; <code>${esc(s.sap_id)}</code><br>
+       <span style="color:var(--muted);font-size:12px;">${esc(s.school)} &mdash; ${esc(s.program)}</span>`;
+
+    const labels = { debarred:'Debarred', failed:'Failed', improvement:'Improvement' };
+    const grouped = { debarred:[], failed:[], improvement:[] };
+    for (const c of data.courses) { if (grouped[c.category]) grouped[c.category].push(c); }
+
+    let html = '';
+    for (const [cat, courses] of Object.entries(grouped)) {
+      if (!courses.length) continue;
+      html += `<div style="font-size:11px;font-weight:bold;color:var(--muted);text-transform:uppercase;margin:8px 0 4px;">${labels[cat]}</div>`;
+      for (const c of courses) {
+        html += `<label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" value="${esc(c.course_code)}" style="margin-top:3px;flex-shrink:0;">
+          <span><strong>${esc(c.course_code)}</strong> — ${esc(c.course_name)} <span style="color:var(--muted);">(${c.credits} cr)</span></span>
+        </label>`;
+      }
+    }
+    if (!html) html = '<p style="color:var(--muted);font-size:13px;margin:0;">No eligible courses found for this student.</p>';
+    byId('me-courses').innerHTML = html;
+    byId('me-step2').classList.remove('hidden');
+  } catch {
+    alertEl.textContent = 'Network error. Please try again.';
+    alertEl.classList.remove('hidden');
+  }
+}
+
+async function submitManualEntry() {
+  const email          = (byId('me-email').value || '').trim().toLowerCase();
+  const payment_ref    = (byId('me-payment-ref').value || '').trim() || 'MANUAL ENTRY';
+  const payment_status = byId('me-payment-status').value;
+  const course_codes   = [...byId('me-courses').querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+  const alertEl        = byId('me-submit-alert');
+
+  if (!course_codes.length) {
+    alertEl.textContent = 'Please select at least one course.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  alertEl.classList.add('hidden');
+
+  try {
+    const res  = await api('POST', '/api/admin/manual-entry', { email, course_codes, payment_ref, payment_status });
+    const data = await res.json();
+    if (!res.ok) {
+      alertEl.textContent = data.error || 'Failed to add entry.';
+      alertEl.classList.remove('hidden');
+      return;
+    }
+    closeManualEntry();
+    await Promise.all([loadStats(), loadSubmissions()]);
+    alert(`Entry added successfully!\nApplication No: ${data.app_no}`);
+  } catch {
+    alertEl.textContent = 'Network error. Please try again.';
+    alertEl.classList.remove('hidden');
+  }
+}
+
 /* ─── Sample CSV ─────────────────────────────────────────────────────────── */
 function downloadSample() {
   const csv = `Student Global ID,Student Name,Student Email,School Name,Program Name,Program Code,Semester,Course Code,Module Name,Credit Point,Final Grade

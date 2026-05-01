@@ -698,6 +698,61 @@ app.post('/api/admin/save-settings', requireAdmin, async (req, res) => {
   }
 });
 
+// Lookup student for manual entry
+app.get('/api/admin/student-lookup', requireAdmin, async (req, res) => {
+  const email = (req.query.email || '').toLowerCase().trim();
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const { data: student } = await supabase.from('students').select().eq('email', email).maybeSingle();
+  if (!student) return res.status(404).json({ error: 'Student not found. Upload their data via CSV first.' });
+  const { data: courses } = await supabase.from('student_courses').select().eq('email', email);
+  res.json({ student, courses: courses || [] });
+});
+
+// Manual submission entry by admin
+app.post('/api/admin/manual-entry', requireAdmin, async (req, res) => {
+  const { email, course_codes, payment_ref, payment_status } = req.body;
+  const cleanEmail = (email || '').toLowerCase().trim();
+  if (!cleanEmail || !Array.isArray(course_codes) || course_codes.length === 0)
+    return res.status(400).json({ error: 'Email and at least one course are required.' });
+
+  const { data: student } = await supabase.from('students').select().eq('email', cleanEmail).maybeSingle();
+  if (!student) return res.status(404).json({ error: 'Student not found.' });
+
+  const { data: existing } = await supabase.from('submissions').select('id').eq('email', cleanEmail).maybeSingle();
+  if (existing) return res.status(400).json({ error: 'Student already has a submission. Delete it first if you need to replace it.' });
+
+  const maxCourses = await getMaxCourses();
+  if (course_codes.length > maxCourses)
+    return res.status(400).json({ error: `Maximum ${maxCourses} courses allowed.` });
+
+  const validated = [];
+  for (const code of course_codes) {
+    const { data: dbCourse } = await supabase.from('student_courses').select().eq('email', cleanEmail).eq('course_code', code).maybeSingle();
+    if (!dbCourse) return res.status(400).json({ error: `Course ${code} is not in this student's eligible list.` });
+    validated.push({ course_code: dbCourse.course_code, course_name: dbCourse.course_name, credits: dbCourse.credits, category: dbCourse.category, fee: calcFee(dbCourse.credits) });
+  }
+
+  const app_no = await generateAppNo();
+  const submitted_at = new Date().toISOString();
+  const total_fee = validated.reduce((s, c) => s + c.fee, 0);
+  const status = ['pending','verified','rejected'].includes(payment_status) ? payment_status : 'verified';
+
+  await supabase.from('submissions').insert({
+    app_no, email: cleanEmail,
+    sap_id: student.sap_id, student_name: student.name,
+    school: student.school, program: student.program,
+    courses: validated, total_fee,
+    payment_ref: (payment_ref || 'MANUAL ENTRY').trim().toUpperCase(),
+    payment_screenshot: null,
+    payment_status: status,
+    submitted_at,
+    verified_at: status === 'verified' ? submitted_at : null,
+    ip_address: 'ADMIN-MANUAL'
+  });
+
+  res.json({ success: true, app_no });
+});
+
 // Settings
 app.get('/api/admin/settings', requireAdmin, async (req, res) => {
   const keys = ['upi_id', 'max_courses', 'reg_start', 'reg_end'];
