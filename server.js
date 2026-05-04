@@ -405,58 +405,6 @@ app.post('/api/apply', requireStudent, async (req, res) => {
 
   await supabase.from('pending_selections').delete().eq('email', email);
 
-  // Send "application received" email
-  try {
-    const courseRows = validated.map((c, i) =>
-      `<tr>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;">${i+1}</td>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;font-weight:bold;">${c.course_code}</td>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;">${c.course_name}</td>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;text-align:center;">${c.credits}</td>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;text-align:center;">${c.category}</td>
-        <td style="padding:7px 10px;border:1px solid #B2DFDB;text-align:right;">&#8377;${c.fee.toLocaleString('en-IN')}</td>
-      </tr>`
-    ).join('');
-
-    await sendMail(email,
-      `UPES Summer Semester — Application Received [${app_no}]`,
-      `<div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;">
-        <div style="background:#003E4E;color:white;padding:18px 24px;">
-          <div style="font-size:15px;font-weight:bold;text-transform:uppercase;">University of Petroleum and Energy Studies</div>
-          <div style="font-size:12px;opacity:.8;margin-top:3px;">Summer Semester Registration Portal — 2025-26</div>
-        </div>
-        <div style="padding:24px;border:1px solid #A8D5DC;background:#fff;">
-          <p>Dear <strong>${student.name}</strong>,</p>
-          <p style="margin:10px 0;">Your Summer Semester application <strong>${app_no}</strong> has been received. Below are the details:</p>
-          <table style="width:100%;border-collapse:collapse;margin:14px 0;">
-            <thead><tr style="background:#005F73;color:white;">
-              <th style="padding:8px 10px;">#</th>
-              <th style="padding:8px 10px;">Course Code</th>
-              <th style="padding:8px 10px;">Course Name</th>
-              <th style="padding:8px 10px;">Credits</th>
-              <th style="padding:8px 10px;">Category</th>
-              <th style="padding:8px 10px;">Fee</th>
-            </tr></thead>
-            <tbody>${courseRows}</tbody>
-            <tfoot><tr style="background:#D6EAF0;font-weight:bold;">
-              <td colspan="5" style="padding:8px 10px;border:1px solid #B2DFDB;text-align:right;">Total Amount</td>
-              <td style="padding:8px 10px;border:1px solid #B2DFDB;text-align:right;">&#8377;${total_fee.toLocaleString('en-IN')}</td>
-            </tr></tfoot>
-          </table>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
-            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;width:40%;">Application No.</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${app_no}</td></tr>
-            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Student Global ID</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${student.sap_id}</td></tr>
-            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">UPI Transaction Ref</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${isStaff ? 'N/A' : payment_ref.trim().toUpperCase()}</td></tr>
-            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Status</td><td style="padding:7px 10px;border:1px solid #A8D5DC;color:#D4860A;font-weight:bold;">Pending Verification</td></tr>
-          </table>
-          <p style="color:#555;font-size:12px;">For queries, contact your School Academic Coordinator or email academics@ddn.upes.ac.in</p>
-        </div>
-        <div style="background:#EEF7F9;padding:8px 24px;font-size:11px;color:#4A7A86;border:1px solid #A8D5DC;border-top:none;">
-          UPES Dehradun | academics@ddn.upes.ac.in
-        </div>
-      </div>`
-    );
-  } catch (e) { console.error('Confirmation email failed:', e.message); }
 
   const finalRef = isStaff ? 'STAFF-NO-FEE' : payment_ref.trim().toUpperCase();
   res.json({ success: true, app_no, submitted_at, payment_ref: finalRef, courses: validated, total_fee });

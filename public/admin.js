@@ -244,7 +244,6 @@ function renderPayments(rows) {
       <td>${(r.courses||[]).map(c=>`<span style="display:block;font-size:12px;"><b>${esc(c.course_code)}</b> ${esc(c.course_name)}</span>`).join('')}</td>
       <td style="font-weight:bold;">${rupee(r.total_fee)}</td>
       <td style="font-family:monospace;font-size:12px;">${esc(r.payment_ref)}</td>
-      <td style="text-align:center;"><button class="btn btn-navy btn-sm" onclick="viewScreenshot('${r.id}')" title="View payment screenshot">Screenshot</button></td>
       <td><span class="status-pill pill-pending">Pending</span></td>
       <td style="font-size:12px;white-space:nowrap;">${ist(r.submitted_at)}</td>
       <td style="text-align:center;white-space:nowrap;">
@@ -314,9 +313,6 @@ async function deleteSub(id) {
   } catch { alert('Network error.'); }
 }
 
-function viewScreenshot(id) {
-  window.open(`/api/admin/screenshot/${id}?token=${adminToken}`, '_blank');
-}
 
 /* ─── Students ───────────────────────────────────────────────────────────── */
 async function loadStudents() {
