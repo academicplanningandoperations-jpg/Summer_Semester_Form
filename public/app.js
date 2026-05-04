@@ -537,26 +537,9 @@ async function initPayment() {
     });
   }
 
-  // Staff bypass notice
   if (isStaffEmail(studentData?.email)) {
-    const txnField = byId('inp-txn');
-    if (txnField) {
-      txnField.placeholder = 'Not required for staff/faculty';
-      txnField.style.background = '#F5F5F5';
-    }
     const ssField = byId('screenshot-field');
     if (ssField) ssField.classList.add('hidden');
-    const submitBtn = byId('btn-submit');
-    if (submitBtn) submitBtn.textContent = '✓ SUBMIT APPLICATION (NO FEE)';
-
-    const container = byId('pay-alert')?.parentElement;
-    if (container) {
-      const note = document.createElement('div');
-      note.className = 'alert alert-info mb-12';
-      note.style.marginTop = '12px';
-      note.innerHTML = '<strong>Staff / Faculty:</strong> Payment is not required. You may submit without entering a transaction reference.';
-      container.insertBefore(note, byId('pay-alert'));
-    }
   }
 
   try {
