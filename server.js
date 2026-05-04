@@ -357,14 +357,12 @@ app.post('/api/lock-selection', requireStudent, async (req, res) => {
 
 // Submit application
 app.post('/api/apply', requireStudent, async (req, res) => {
-  const { payment_ref, payment_screenshot } = req.body;
+  const { payment_ref } = req.body;
   const email   = req.user.email;
   const isStaff = email.endsWith('@ddn.upes.ac.in');
 
   if (!isStaff && (!payment_ref || payment_ref.trim().length < 6))
     return res.status(400).json({ error: 'Please enter a valid UPI Transaction Reference ID.' });
-  if (!isStaff && !payment_screenshot)
-    return res.status(400).json({ error: 'Please upload a screenshot of your payment.' });
 
   const regWindow = await checkRegistrationWindow();
   if (!regWindow.open) return res.status(403).json({ error: regWindow.reason });
@@ -397,9 +395,9 @@ app.post('/api/apply', requireStudent, async (req, res) => {
     program:        student.program,
     courses:        validated,
     total_fee,
-    payment_ref:    isStaff ? 'STAFF/FACULTY – NO FEE' : payment_ref.trim().toUpperCase(),
-    payment_screenshot: isStaff ? null : (payment_screenshot || null),
-    payment_status: isStaff ? 'verified' : 'pending',
+    payment_ref:    isStaff ? 'STAFF-NO-FEE' : payment_ref.trim().toUpperCase(),
+    payment_screenshot: null,
+    payment_status: 'pending',
     submitted_at,
     verified_at:    null,
     ip_address:     ip
@@ -448,11 +446,8 @@ app.post('/api/apply', requireStudent, async (req, res) => {
           <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
             <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;width:40%;">Application No.</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${app_no}</td></tr>
             <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Student Global ID</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${student.sap_id}</td></tr>
-            ${isStaff
-              ? `<tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Status</td><td style="padding:7px 10px;border:1px solid #A8D5DC;color:#2E7D32;font-weight:bold;">Staff/Faculty — No fee required. Auto-approved.</td></tr>`
-              : `<tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">UPI Transaction Ref</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${payment_ref.trim().toUpperCase()}</td></tr>
-                 <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Status</td><td style="padding:7px 10px;border:1px solid #A8D5DC;color:#D4860A;font-weight:bold;">Pending Payment Verification (1–2 working days)</td></tr>`
-            }
+            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">UPI Transaction Ref</td><td style="padding:7px 10px;border:1px solid #A8D5DC;">${isStaff ? 'N/A' : payment_ref.trim().toUpperCase()}</td></tr>
+            <tr><td style="padding:7px 10px;border:1px solid #A8D5DC;background:#EEF7F9;font-weight:bold;">Status</td><td style="padding:7px 10px;border:1px solid #A8D5DC;color:#D4860A;font-weight:bold;">Pending Verification</td></tr>
           </table>
           <p style="color:#555;font-size:12px;">For queries, contact your School Academic Coordinator or email academics@ddn.upes.ac.in</p>
         </div>
@@ -463,7 +458,7 @@ app.post('/api/apply', requireStudent, async (req, res) => {
     );
   } catch (e) { console.error('Confirmation email failed:', e.message); }
 
-  const finalRef = isStaff ? 'STAFF/FACULTY – NO FEE' : payment_ref.trim().toUpperCase();
+  const finalRef = isStaff ? 'STAFF-NO-FEE' : payment_ref.trim().toUpperCase();
   res.json({ success: true, app_no, submitted_at, payment_ref: finalRef, courses: validated, total_fee });
 });
 

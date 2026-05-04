@@ -469,7 +469,6 @@ async function proceedToPayment() {
 }
 
 /* ─── PAYMENT PAGE ───────────────────────────────────────────────────────── */
-let screenshotBase64 = null;
 
 async function initPayment() {
   fill('p-name',    studentData?.name);
@@ -499,48 +498,6 @@ async function initPayment() {
   const amtEl = byId('instr-amt');
   if (amtEl) amtEl.textContent = totalFee.toLocaleString('en-IN');
 
-  // Screenshot upload handler
-  const ssInput = byId('inp-screenshot');
-  if (ssInput) {
-    ssInput.addEventListener('change', function() {
-      const file = this.files[0];
-      const preview = byId('screenshot-preview');
-      const nameEl  = byId('screenshot-name');
-      if (!file) {
-        screenshotBase64 = null;
-        if (preview) preview.classList.add('hidden');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        showAlert('pay-alert', 'Screenshot file is too large. Maximum size is 5 MB.');
-        this.value = '';
-        screenshotBase64 = null;
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        showAlert('pay-alert', 'Please upload an image file (PNG, JPG, etc).');
-        this.value = '';
-        screenshotBase64 = null;
-        return;
-      }
-      hideAlert('pay-alert');
-      const reader = new FileReader();
-      reader.onload = e => {
-        screenshotBase64 = e.target.result;
-        if (preview) {
-          preview.src = screenshotBase64;
-          preview.classList.remove('hidden');
-        }
-        if (nameEl) nameEl.textContent = file.name;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  if (isStaffEmail(studentData?.email)) {
-    const ssField = byId('screenshot-field');
-    if (ssField) ssField.classList.add('hidden');
-  }
 
   try {
     const res = await fetch('/api/payment/info');
@@ -559,7 +516,6 @@ async function submitApplication() {
 
   if (!staff && !txn) return showAlert('pay-alert', 'Please enter your UPI Transaction Reference / UTR Number.');
   if (!staff && txn.length < 6) return showAlert('pay-alert', 'Transaction reference appears too short. Please verify and re-enter.');
-  if (!staff && !screenshotBase64) return showAlert('pay-alert', 'Please upload a screenshot of your payment.');
 
   const raw = sessionStorage.getItem('pending_courses');
   if (!raw) return showAlert('pay-alert', 'Session data lost. Please go back and re-select courses.');
@@ -570,7 +526,7 @@ async function submitApplication() {
     const res  = await fetch('/api/apply', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${studentToken}` },
-      body: JSON.stringify({ courses, payment_ref: txn || '', payment_screenshot: screenshotBase64 || '' })
+      body: JSON.stringify({ courses, payment_ref: txn || '' })
     });
     const data = await res.json();
     if (!res.ok) return showAlert('pay-alert', data.error || 'Submission failed. Please try again.');
