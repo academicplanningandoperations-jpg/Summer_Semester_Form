@@ -120,6 +120,7 @@ async function verifyOTP() {
     if (!res.ok) return showAlert('otp-alert', data.error || 'Invalid OTP. Please try again.');
     sessionStorage.setItem('student_token', data.token);
     sessionStorage.setItem('student_data', JSON.stringify(data.student));
+    sessionStorage.removeItem('last_confirmation');
     showSuccessAnimation('Identity Verified!', 'Redirecting to course selection…', () => {
       window.location.href = '/apply';
     });
@@ -187,6 +188,7 @@ async function checkRegistrationStatus() {
 
 /* ─── APPLY: Course Selection ────────────────────────────────────────────── */
 async function initApply() {
+  sessionStorage.removeItem('last_confirmation');
   fill('d-name',    studentData?.name);
   fill('d-sid',     studentData?.sap_id);
   fill('d-school',  studentData?.school);
